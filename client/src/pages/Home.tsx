@@ -1,0 +1,9 @@
+import React from 'react';
+import { Link, useLocation } from 'wouter';
+import { useAuth } from '@/contexts/AuthContext';
+export default function Home() {
+  const { user } = useAuth();
+  const [location] = useLocation();
+
+  return <div>Home Sweet Home Let's build the home page here.</div>;
+}
