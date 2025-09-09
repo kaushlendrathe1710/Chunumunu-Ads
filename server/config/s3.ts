@@ -264,6 +264,112 @@ export async function generatePresignedUrlForUpload(
   }
 }
 
+// Function to upload an image file to S3
+export async function uploadImageToS3(filePath: string, fileName: string): Promise<string> {
+  try {
+    // Validate inputs
+    if (!filePath) throw new Error('File path is required');
+    if (!fileName) throw new Error('File name is required');
+
+    // Clean the filename to prevent S3 path issues
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+    // Read the file as a stream with error handling
+    let fileStream;
+    try {
+      fileStream = createReadStream(filePath);
+    } catch (error) {
+      console.error(`Failed to read file at path ${filePath}:`, error);
+      throw new Error(
+        `Could not read file: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+
+    // Add error event handler to the stream
+    fileStream.on('error', (error) => {
+      console.error('Error reading file stream:', error);
+      throw new Error(`File stream error: ${error.message}`);
+    });
+
+    // Create a unique file key (path in S3) with UUID for collision prevention
+    const timestamp = Date.now();
+    const uuid = Math.random().toString(36).substring(2, 15);
+    const key = `images/${timestamp}-${uuid}-${sanitizedFileName}`;
+
+    // Detect content type based on file extension
+    let contentType = 'image/jpeg'; // Default
+    if (fileName.endsWith('.png')) contentType = 'image/png';
+    else if (fileName.endsWith('.gif')) contentType = 'image/gif';
+    else if (fileName.endsWith('.webp')) contentType = 'image/webp';
+    else if (fileName.endsWith('.svg')) contentType = 'image/svg+xml';
+
+    // Configure the upload parameters
+    const uploadParams = {
+      Bucket: bucketName,
+      Key: key,
+      Body: fileStream,
+      ContentType: contentType,
+      Metadata: {
+        'original-name': fileName,
+        'upload-timestamp': timestamp.toString(),
+      },
+    };
+
+    // Create a multipart upload with retry configuration
+    const upload = new Upload({
+      client: s3Client,
+      params: uploadParams,
+      tags: [], // Optional tags
+      queueSize: 4, // Number of concurrent parts to upload
+      partSize: 1024 * 1024 * 5, // 5 MB parts
+      leavePartsOnError: false, // Clean up partial uploads on failure
+    });
+
+    // Track upload progress
+    upload.on('httpUploadProgress', (progress) => {
+      console.log(`Upload progress: ${progress.loaded}/${progress.total} bytes`);
+    });
+
+    // Execute the upload and get the result
+    const result = await upload.done();
+
+    // Return the URL of the uploaded file
+    const imageUrl =
+      result.Location || `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    console.log(`Successfully uploaded image to S3: ${imageUrl}`);
+    return imageUrl;
+  } catch (error) {
+    console.error('Error uploading image to S3:', error);
+    throw new Error(
+      `Failed to upload image to S3: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+// Function to delete a file from S3 using key
+export async function deleteFromS3(key: string): Promise<void> {
+  try {
+    // Validate input
+    if (!key) throw new Error('File key is required');
+
+    // Configure the delete parameters
+    const deleteParams = {
+      Bucket: bucketName,
+      Key: key,
+    };
+
+    // Execute the delete command
+    await s3Client.send(new DeleteObjectCommand(deleteParams));
+
+    console.log(`Successfully deleted from S3: ${key}`);
+  } catch (error) {
+    console.error('Error deleting file from S3:', error);
+    throw new Error(
+      `Failed to delete file from S3: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
 // Function to delete a video file from S3
 export async function deleteVideoFromS3(key: string): Promise<void> {
   try {
