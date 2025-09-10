@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'react-toastify';
 import { useLocation } from 'wouter';
 import { Button } from '../ui/button';

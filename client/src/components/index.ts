@@ -10,3 +10,4 @@ export * from './ads';
 
 // Common components
 export { TagInput } from './common/TagInput';
+export { ThemeToggle } from './common/ThemeToggle';

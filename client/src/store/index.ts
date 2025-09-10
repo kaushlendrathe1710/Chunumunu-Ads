@@ -2,11 +2,13 @@ import { configureStore } from '@reduxjs/toolkit';
 import { useDispatch, useSelector, TypedUseSelectorHook } from 'react-redux';
 import authSlice from './slices/authSlice';
 import teamSlice from './slices/teamSlice.ts';
+import themeSlice from './slices/themeSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authSlice,
     team: teamSlice,
+    theme: themeSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

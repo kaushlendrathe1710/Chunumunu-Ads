@@ -1,6 +1,6 @@
 import React, { PropsWithChildren } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import Header from '../common/Header';
 import DashboardSidebar from '../common/DashboardSidebar';

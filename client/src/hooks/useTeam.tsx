@@ -1,33 +1,14 @@
-import React, { createContext, useContext, useEffect, ReactNode } from 'react';
+import { useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { useAuth } from '@/contexts/AuthContext';
 import { fetchUserTeams, setCurrentTeam, setUserPermissions } from '@/store/slices/teamSlice';
 import { TeamWithUserRole, Permission, TeamRole } from '@shared/types';
 
-interface TeamContextType {
-  teams: TeamWithUserRole[];
-  currentTeam: TeamWithUserRole | null;
-  userPermissions: Permission[];
-  userRole: TeamRole | null;
-  loading: boolean;
-  error: string | null;
-  switchTeam: (team: TeamWithUserRole) => void;
-  hasPermission: (permission: Permission) => boolean;
-  refreshTeams: () => void;
-}
-
-const TeamContext = createContext<TeamContextType | undefined>(undefined);
-
-interface TeamProviderProps {
-  children: ReactNode;
-}
-
-export function TeamProvider({ children }: TeamProviderProps) {
+export const useTeam = () => {
   const dispatch = useAppDispatch();
   const { teams, currentTeam, userPermissions, userRole, loading, error } = useAppSelector(
     (state) => state.team
   );
-  const { user } = useAuth(); // Get user from AuthContext instead of Redux
+  const { user } = useAppSelector((state) => state.auth);
 
   useEffect(() => {
     if (user) {
@@ -71,7 +52,7 @@ export function TeamProvider({ children }: TeamProviderProps) {
     }
   };
 
-  const value: TeamContextType = {
+  return {
     teams,
     currentTeam,
     userPermissions,
@@ -82,14 +63,4 @@ export function TeamProvider({ children }: TeamProviderProps) {
     hasPermission,
     refreshTeams,
   };
-
-  return <TeamContext.Provider value={value}>{children}</TeamContext.Provider>;
-}
-
-export function useTeam() {
-  const context = useContext(TeamContext);
-  if (context === undefined) {
-    throw new Error('useTeam must be used within a TeamProvider');
-  }
-  return context;
-}
+};

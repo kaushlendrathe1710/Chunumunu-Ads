@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { setAuthToken } from '@/api/queryClient';
-import { useRedirectAuthenticated } from '@/hooks/use-auth';
+import { useRedirectAuthenticated } from '@/hooks/useAuth';
 import EmailAuthForm from '@/components/auth/EmailAuthForm';
 import GoogleSignIn from '@/components/auth/GoogleSignIn';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocation } from 'wouter';
 import logo from '@client/public/logo.svg';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Auth() {
   const { isAuthenticated, isLoading } = useRedirectAuthenticated();

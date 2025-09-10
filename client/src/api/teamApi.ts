@@ -1,10 +1,10 @@
-import { 
-  TeamWithOwner, 
-  TeamMemberWithUser, 
+import {
+  TeamWithOwner,
+  TeamMemberWithUser,
   InsertTeam,
   Permission,
   TeamRole,
-  PermissionCheckResponse 
+  PermissionCheckResponse,
 } from '@shared/types';
 
 const API_BASE = '/api';
@@ -15,11 +15,11 @@ class TeamAPI {
     const response = await fetch(`${API_BASE}/teams`, {
       credentials: 'include',
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to fetch teams');
     }
-    
+
     const data = await response.json();
     return data.teams;
   }
@@ -33,11 +33,11 @@ class TeamAPI {
       credentials: 'include',
       body: JSON.stringify(teamData),
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to create team');
     }
-    
+
     const data = await response.json();
     return data.team;
   }
@@ -46,11 +46,11 @@ class TeamAPI {
     const response = await fetch(`${API_BASE}/teams/${teamId}`, {
       credentials: 'include',
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to fetch team');
     }
-    
+
     const data = await response.json();
     return data.team;
   }
@@ -64,11 +64,11 @@ class TeamAPI {
       credentials: 'include',
       body: JSON.stringify(updates),
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to update team');
     }
-    
+
     const data = await response.json();
     return data.team;
   }
@@ -78,17 +78,17 @@ class TeamAPI {
     const response = await fetch(`${API_BASE}/teams/${teamId}/members`, {
       credentials: 'include',
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to fetch team members');
     }
-    
+
     const data = await response.json();
     return data.members;
   }
 
   static async inviteMember(
-    teamId: number, 
+    teamId: number,
     memberData: { email: string; role: TeamRole; permissions: Permission[] }
   ): Promise<TeamMemberWithUser> {
     const response = await fetch(`${API_BASE}/teams/${teamId}/members`, {
@@ -99,19 +99,19 @@ class TeamAPI {
       credentials: 'include',
       body: JSON.stringify(memberData),
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to invite member');
     }
-    
+
     const data = await response.json();
     return data.member;
   }
 
   static async updateMember(
-    teamId: number, 
-    userId: number, 
+    teamId: number,
+    userId: number,
     updates: { role: TeamRole; permissions: Permission[] }
   ): Promise<TeamMemberWithUser> {
     const response = await fetch(`${API_BASE}/teams/${teamId}/members/${userId}`, {
@@ -122,11 +122,11 @@ class TeamAPI {
       credentials: 'include',
       body: JSON.stringify(updates),
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to update member');
     }
-    
+
     const data = await response.json();
     return data.member;
   }
@@ -136,7 +136,7 @@ class TeamAPI {
       method: 'DELETE',
       credentials: 'include',
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to remove member');
     }
@@ -144,8 +144,8 @@ class TeamAPI {
 
   // Permissions
   static async checkPermission(
-    teamId: number, 
-    userId: number, 
+    teamId: number,
+    userId: number,
     permission: Permission
   ): Promise<PermissionCheckResponse> {
     const response = await fetch(
@@ -154,21 +154,31 @@ class TeamAPI {
         credentials: 'include',
       }
     );
-    
+
     if (!response.ok) {
       throw new Error('Failed to check permission');
     }
-    
+
     return response.json();
   }
 
-  static async getUserPermissions(teamId: number, userId: number): Promise<{
+  static async getUserPermissions(
+    teamId: number,
+    userId: number
+  ): Promise<{
     permissions: Permission[];
     role: TeamRole | null;
   }> {
     const allPermissions: Permission[] = [
-      'create_campaign', 'edit_campaign', 'delete_campaign', 'view_campaign',
-      'create_ad', 'edit_ad', 'delete_ad', 'view_ad', 'manage_team'
+      'create_campaign',
+      'edit_campaign',
+      'delete_campaign',
+      'view_campaign',
+      'create_ad',
+      'edit_ad',
+      'delete_ad',
+      'view_ad',
+      'manage_team',
     ];
 
     const checks = await Promise.all(
@@ -183,10 +193,10 @@ class TeamAPI {
     );
 
     const permissions = checks
-      .filter(check => check.hasPermission)
-      .map(check => check.permission);
+      .filter((check) => check.hasPermission)
+      .map((check) => check.permission);
 
-    const role = checks.find(check => check.userRole)?.userRole || null;
+    const role = checks.find((check) => check.userRole)?.userRole || null;
 
     return { permissions, role };
   }

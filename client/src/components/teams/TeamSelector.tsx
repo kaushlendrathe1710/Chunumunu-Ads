@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useTeam } from '@/contexts/TeamContext';
+import { useTeam } from '@/hooks/useTeam';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -23,13 +23,11 @@ export function TeamSelector() {
           <Button variant="outline" className="w-full justify-between">
             <div className="flex items-center gap-2">
               <Avatar className="h-6 w-6">
-                <div className="flex h-full w-full items-center justify-center bg-primary text-primary-foreground text-xs">
+                <div className="flex h-full w-full items-center justify-center bg-primary text-xs text-primary-foreground">
                   {currentTeam?.name?.[0]?.toUpperCase() || 'T'}
                 </div>
               </Avatar>
-              <span className="truncate">
-                {currentTeam?.name || 'Select Team'}
-              </span>
+              <span className="truncate">{currentTeam?.name || 'Select Team'}</span>
             </div>
             <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
@@ -42,13 +40,13 @@ export function TeamSelector() {
               className="flex items-center gap-2"
             >
               <Avatar className="h-6 w-6">
-                <div className="flex h-full w-full items-center justify-center bg-primary text-primary-foreground text-xs">
+                <div className="flex h-full w-full items-center justify-center bg-primary text-xs text-primary-foreground">
                   {team.name[0].toUpperCase()}
                 </div>
               </Avatar>
               <div className="flex-1 truncate">
-                <div className="font-medium truncate">{team.name}</div>
-                <div className="text-xs text-muted-foreground truncate">
+                <div className="truncate font-medium">{team.name}</div>
+                <div className="truncate text-xs text-muted-foreground">
                   Owner: {team.owner.username}
                 </div>
               </div>
@@ -65,10 +63,7 @@ export function TeamSelector() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <CreateTeamModal
-        open={showCreateModal}
-        onOpenChange={setShowCreateModal}
-      />
+      <CreateTeamModal open={showCreateModal} onOpenChange={setShowCreateModal} />
     </>
   );
 }

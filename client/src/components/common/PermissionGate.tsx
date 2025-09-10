@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTeam } from '@/contexts/TeamContext';
+import { useTeam } from '@/hooks/useTeam';
 import { Permission } from '@shared/types';
 
 interface PermissionGateProps {

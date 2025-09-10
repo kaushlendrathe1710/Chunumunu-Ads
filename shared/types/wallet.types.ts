@@ -15,7 +15,15 @@ export interface Transaction {
   amount: string;
   description?: string;
   referenceId?: string;
-  paymentMethod?: 'credit_card' | 'debit_card' | 'bank_transfer' | 'paypal' | 'stripe' | 'razorpay' | 'wallet' | 'manual';
+  paymentMethod?:
+    | 'credit_card'
+    | 'debit_card'
+    | 'bank_transfer'
+    | 'paypal'
+    | 'stripe'
+    | 'razorpay'
+    | 'wallet'
+    | 'manual';
   status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'refunded';
   campaignId?: number;
   adId?: number;
@@ -38,7 +46,15 @@ export interface InsertTransaction {
   amount: string;
   description?: string;
   referenceId?: string;
-  paymentMethod?: 'credit_card' | 'debit_card' | 'bank_transfer' | 'paypal' | 'stripe' | 'razorpay' | 'wallet' | 'manual';
+  paymentMethod?:
+    | 'credit_card'
+    | 'debit_card'
+    | 'bank_transfer'
+    | 'paypal'
+    | 'stripe'
+    | 'razorpay'
+    | 'wallet'
+    | 'manual';
   status?: 'pending' | 'completed' | 'failed' | 'cancelled' | 'refunded';
   campaignId?: number;
   adId?: number;

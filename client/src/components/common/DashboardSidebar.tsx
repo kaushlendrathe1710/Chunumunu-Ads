@@ -1,7 +1,7 @@
 import React from 'react';
 import logo from '@client/public/logo.svg';
 import { Link, useLocation } from 'wouter';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Sidebar,
   SidebarHeader,
@@ -11,7 +11,7 @@ import {
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import { Home, Tag, Users, Settings, PlayCircle, Wallet } from 'lucide-react';
-import { useTeam } from '@/contexts/TeamContext';
+import { useTeam } from '@/hooks/useTeam';
 
 export default function DashboardSidebar() {
   const { user } = useAuth();

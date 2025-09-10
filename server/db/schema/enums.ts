@@ -28,7 +28,7 @@ export const impressionActionEnum = pgEnum('impression_action', [
   'pause',
   'resume',
   'mute',
-  'unmute'
+  'unmute',
 ]);
 
 // Device type enum for analytics
@@ -37,7 +37,7 @@ export const deviceTypeEnum = pgEnum('device_type', [
   'mobile',
   'tablet',
   'tv',
-  'unknown'
+  'unknown',
 ]);
 
 // Operating system enum
@@ -48,5 +48,5 @@ export const osTypeEnum = pgEnum('os_type', [
   'ios',
   'android',
   'tvos',
-  'unknown'
+  'unknown',
 ]);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Route, useLocation } from 'wouter';
-import { useAuth } from '@client/src/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '../layout/DashboardLayout';
 
 type ProtectedRouteProps = {

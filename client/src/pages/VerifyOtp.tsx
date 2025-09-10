@@ -5,8 +5,8 @@ import {
   InputOTPSlot,
 } from '@/components/ui/input-otp';
 import { useState, useEffect } from 'react';
-import { useRedirectAuthenticated } from '@/hooks/use-auth';
-import { useAuth } from '@/hooks/use-auth';
+import { useRedirectAuthenticated } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import { useLocation, useRoute } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'react-toastify';

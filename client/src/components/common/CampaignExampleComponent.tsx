@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PermissionGate, RoleGate } from '@/components/common/PermissionGate';
-import { useTeam } from '@/contexts/TeamContext';
+import { useTeam } from '@/hooks/useTeam';
 import { Plus, Edit, Trash2, Eye } from 'lucide-react';
 
 export function CampaignExampleComponent() {

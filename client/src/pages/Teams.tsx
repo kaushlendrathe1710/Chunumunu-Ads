@@ -2,7 +2,7 @@ import React from 'react';
 import { DashboardLayout } from '@/components';
 import { TeamSelector, TeamMembersManagement } from '@/components/teams';
 import { CampaignExampleComponent } from '@/components/common/CampaignExampleComponent';
-import { useTeam } from '@/contexts/TeamContext';
+import { useTeam } from '@/hooks/useTeam';
 
 export default function Teams() {
   const { currentTeam } = useTeam();

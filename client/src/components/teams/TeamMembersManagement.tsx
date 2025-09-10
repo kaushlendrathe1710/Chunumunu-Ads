@@ -6,7 +6,7 @@ import {
   updateTeamMember,
   removeTeamMember,
 } from '@/store/slices/teamSlice';
-import { useTeam } from '@/contexts/TeamContext';
+import { useTeam } from '@/hooks/useTeam';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {

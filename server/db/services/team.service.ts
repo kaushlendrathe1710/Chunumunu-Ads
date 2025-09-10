@@ -90,7 +90,7 @@ export class TeamService {
     return result.map((member) => ({
       ...member.team,
       userRole: member.role,
-      userPermissions: member.permissions || []
+      userPermissions: member.permissions || [],
     }));
   }
 

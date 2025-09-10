@@ -21,3 +21,9 @@ export const permission = {
   view_ad: 'view_ad',
   manage_team: 'manage_team',
 } as const;
+
+export const theme = {
+  dark: 'dark',
+  light: 'light',
+  system: 'system',
+}

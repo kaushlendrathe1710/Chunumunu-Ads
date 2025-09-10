@@ -1,8 +1,8 @@
 import logo from '@client/public/logo.svg';
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useAuth } from '@/contexts/AuthContext';
-import { useTeam } from '@/contexts/TeamContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useTeam } from '@/hooks/useTeam';
 import { cn } from '@/lib/utils';
 import { Upload, Menu, Plus, Users, ChevronDown, Settings } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -18,27 +18,13 @@ import {
   DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
 import { CreateTeamModal } from '@/components/teams';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
   const { teams, currentTeam, switchTeam, hasPermission } = useTeam();
   const [location, navigate] = useLocation();
   const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  });
-
-  const toggleDarkMode = () => {
-    const newIsDarkMode = !isDarkMode;
-    setIsDarkMode(newIsDarkMode);
-    if (typeof window !== 'undefined') {
-      document.documentElement.classList.toggle('dark', newIsDarkMode);
-      localStorage.setItem('darkMode', newIsDarkMode.toString());
-    }
-  };
 
   const handleLogout = async () => {
     await logout();
@@ -51,7 +37,7 @@ export default function Header() {
         {/* Left section - Sidebar trigger & team selector */}
         <div className="flex items-center gap-3">
           <SidebarTrigger />
-          
+
           {/* Team Selector */}
           {isAuthenticated && (
             <DropdownMenu>
@@ -67,25 +53,26 @@ export default function Header() {
               <DropdownMenuContent align="start" className="w-64">
                 <DropdownMenuLabel>Switch Team</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                
+
                 {teams.length > 0 ? (
                   <>
                     {teams.map((team) => (
                       <DropdownMenuItem
                         key={team.id}
                         onClick={() => switchTeam(team)}
-                        className={cn(
-                          'cursor-pointer',
-                          currentTeam?.id === team.id && 'bg-accent'
-                        )}
+                        className={cn('cursor-pointer', currentTeam?.id === team.id && 'bg-accent')}
                       >
-                        <div className="flex items-center justify-between w-full">
+                        <div className="flex w-full items-center justify-between">
                           <div>
                             <div className="font-medium">{team.name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {team.userRole === 'owner' ? 'Owner' : 
-                               team.userRole === 'admin' ? 'Admin' : 
-                               team.userRole === 'member' ? 'Member' : 'Viewer'}
+                              {team.userRole === 'owner'
+                                ? 'Owner'
+                                : team.userRole === 'admin'
+                                  ? 'Admin'
+                                  : team.userRole === 'member'
+                                    ? 'Member'
+                                    : 'Viewer'}
                             </div>
                           </div>
                           {currentTeam?.id === team.id && (
@@ -97,11 +84,9 @@ export default function Header() {
                     <DropdownMenuSeparator />
                   </>
                 ) : (
-                  <DropdownMenuItem disabled>
-                    No teams available
-                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled>No teams available</DropdownMenuItem>
                 )}
-                
+
                 <DropdownMenuItem
                   onClick={() => setIsCreateTeamOpen(true)}
                   className="cursor-pointer"
@@ -116,6 +101,8 @@ export default function Header() {
 
         {/* Right section - User info & actions */}
         <div className="flex items-center gap-3">
+          <ThemeToggle />
+
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -142,7 +129,7 @@ export default function Header() {
                   </div>
                 </div>
                 <DropdownMenuSeparator />
-                
+
                 {/* Team Management */}
                 {currentTeam && hasPermission('manage_team') && (
                   <>
@@ -160,7 +147,7 @@ export default function Header() {
                     <DropdownMenuSeparator />
                   </>
                 )}
-                
+
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
                   <i className="ri-logout-box-line mr-2"></i> Sign out
                 </DropdownMenuItem>
@@ -179,10 +166,7 @@ export default function Header() {
       </div>
 
       {/* Create Team Modal */}
-      <CreateTeamModal
-        open={isCreateTeamOpen}
-        onOpenChange={setIsCreateTeamOpen}
-      />
+      <CreateTeamModal open={isCreateTeamOpen} onOpenChange={setIsCreateTeamOpen} />
     </header>
   );
 }
