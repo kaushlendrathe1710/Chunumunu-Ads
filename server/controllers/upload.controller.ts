@@ -209,7 +209,7 @@ export class UploadController {
       );
 
       // Construct the final URL that will be accessible after upload
-      const finalUrl = `https://${process.env.AWS_RAW_BUCKET_NAME}.s3.${process.env.AWS_RAW_BUCKET_REGION}.amazonaws.com/${key}`;
+      const finalUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_BUCKET_REGION}.amazonaws.com/${key}`;
 
       res.json({
         presignedUrl: url,

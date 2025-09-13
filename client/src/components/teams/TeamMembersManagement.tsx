@@ -1,11 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAppDispatch, useAppSelector } from '@/store';
-import {
-  fetchTeamMembers,
-  inviteTeamMember,
-  updateTeamMember,
-  removeTeamMember,
-} from '@/store/slices/teamSlice';
+import { useAppSelector } from '@/store';
 import { useTeam } from '@/hooks/useTeam';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +38,9 @@ import {
 import { MoreHorizontal, Plus, UserPlus, Trash2, Edit } from 'lucide-react';
 import { TeamRole, Permission } from '@shared/types';
 import { toast } from 'react-toastify';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import TeamAPI from '@/api/teamApi';
+import { QK } from '@/api/queryKeys';
 
 const roleOptions: { value: TeamRole; label: string }[] = [
   { value: 'admin', label: 'Admin' },
@@ -68,9 +65,8 @@ const permissionOptions: { value: Permission; label: string; description: string
 ];
 
 export function TeamMembersManagement() {
-  const dispatch = useAppDispatch();
   const { currentTeam, hasPermission } = useTeam();
-  const { teamMembers, membersLoading, membersError } = useAppSelector((state) => state.team);
+  const queryClient = useQueryClient();
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -81,11 +77,11 @@ export function TeamMembersManagement() {
     permissions: [] as Permission[],
   });
 
-  useEffect(() => {
-    if (currentTeam) {
-      dispatch(fetchTeamMembers(currentTeam.id));
-    }
-  }, [dispatch, currentTeam]);
+  const membersQuery = useQuery({
+    queryKey: currentTeam ? QK.teamMembers(currentTeam.id) : ['team', 'noop', 'members'],
+    queryFn: () => (currentTeam ? TeamAPI.getTeamMembers(currentTeam.id) : Promise.resolve([])),
+    enabled: !!currentTeam,
+  });
 
   const handleInviteMember = async () => {
     if (!currentTeam || !inviteForm.email.trim()) {
@@ -94,25 +90,17 @@ export function TeamMembersManagement() {
     }
 
     try {
-      await dispatch(
-        inviteTeamMember({
-          teamId: currentTeam.id,
-          memberData: {
-            email: inviteForm.email.trim(),
-            role: inviteForm.role,
-            permissions: inviteForm.permissions,
-          },
-        })
-      ).unwrap();
-
+      await TeamAPI.inviteMember(currentTeam.id, {
+        email: inviteForm.email.trim(),
+        role: inviteForm.role,
+        permissions: inviteForm.permissions,
+      });
       toast.success('Member invited successfully');
       setInviteForm({ email: '', role: 'member', permissions: [] });
       setShowInviteModal(false);
-
-      // Refresh members list
-      dispatch(fetchTeamMembers(currentTeam.id));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to invite member');
+      queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to invite member');
     }
   };
 
@@ -120,22 +108,16 @@ export function TeamMembersManagement() {
     if (!currentTeam || !selectedMember) return;
 
     try {
-      await dispatch(
-        updateTeamMember({
-          teamId: currentTeam.id,
-          userId: selectedMember.userId,
-          updates: {
-            role: selectedMember.role,
-            permissions: selectedMember.permissions,
-          },
-        })
-      ).unwrap();
-
+      await TeamAPI.updateMember(currentTeam.id, selectedMember.userId, {
+        role: selectedMember.role,
+        permissions: selectedMember.permissions,
+      });
       toast.success('Member updated successfully');
       setShowEditModal(false);
       setSelectedMember(null);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update member');
+      queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update member');
     }
   };
 
@@ -144,16 +126,11 @@ export function TeamMembersManagement() {
 
     if (confirm('Are you sure you want to remove this member from the team?')) {
       try {
-        await dispatch(
-          removeTeamMember({
-            teamId: currentTeam.id,
-            userId,
-          })
-        ).unwrap();
-
+        await TeamAPI.removeMember(currentTeam.id, userId);
         toast.success('Member removed successfully');
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to remove member');
+        queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
+      } catch (error: any) {
+        toast.error(error?.message || 'Failed to remove member');
       }
     }
   };
@@ -182,6 +159,10 @@ export function TeamMembersManagement() {
       </div>
     );
   }
+
+  const teamMembers = membersQuery.data || [];
+  const membersLoading = membersQuery.isLoading;
+  const membersError = membersQuery.error ? (membersQuery.error as any).message : null;
 
   return (
     <div className="space-y-6">

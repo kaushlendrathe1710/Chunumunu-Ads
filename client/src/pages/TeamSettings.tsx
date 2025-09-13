@@ -1,6 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTeam } from '@/hooks/useTeam';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -21,12 +28,15 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { UserPlus, MoreVertical, Mail, Settings } from 'lucide-react';
+import { UserPlus, MoreVertical, Settings, Plus } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { TeamMemberWithUser, TeamRole, Permission } from '@shared/types';
-import { permission } from '@shared/constants';
+import { limits, permission } from '@shared/constants';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import TeamAPI from '@/api/teamApi';
+import { QK } from '@/api/queryKeys';
 
-export default function TeamMembers() {
+export default function TeamSettings() {
   const { currentTeam, userRole } = useTeam();
   const [members, setMembers] = useState<TeamMemberWithUser[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -64,129 +74,77 @@ export default function TeamMembers() {
     { id: permission.manage_team, label: 'Manage Team', description: 'Can manage team members' },
   ];
 
-  useEffect(() => {
-    if (currentTeam) {
-      fetchTeamMembers();
-    }
-  }, [currentTeam]);
-
-  const fetchTeamMembers = async () => {
-    if (!currentTeam) return;
-
-    try {
-      const response = await fetch(`/api/teams/${currentTeam.id}/members`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMembers(data.members || []);
-      } else {
-        console.error('Failed to fetch team members:', response.status);
-        setMembers([]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch team members:', error);
+  const queryClient = useQueryClient();
+  const membersQuery = useQuery<TeamMemberWithUser[]>({
+    queryKey: currentTeam ? QK.teamMembers(currentTeam.id) : ['teamMembers', 'noop'],
+    queryFn: () =>
+      currentTeam ? TeamAPI.getTeamMembers(currentTeam.id) : (Promise.resolve([]) as any),
+    enabled: !!currentTeam,
+  });
+  if (!membersQuery.isLoading && loading) {
+    if (membersQuery.error) {
       toast.error('Failed to load team members');
       setMembers([]);
-    } finally {
-      setLoading(false);
+    } else if (membersQuery.data) {
+      setMembers(membersQuery.data);
     }
-  };
+    setLoading(false);
+  }
+
+  const inviteMutation = useMutation({
+    mutationFn: (vars: { email: string }) =>
+      TeamAPI.inviteMember(currentTeam!.id, {
+        email: vars.email,
+        role: 'viewer',
+        permissions: [permission.view_campaign, permission.view_ad],
+      }),
+    onSuccess: () => {
+      toast.success(`Added ${inviteEmail} to the team`);
+      setInviteEmail('');
+      if (currentTeam) queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to add member to team'),
+  });
 
   const handleInviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentTeam || !inviteEmail.trim()) return;
-
-    try {
-      const response = await fetch(`/api/teams/${currentTeam.id}/members`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          email: inviteEmail.trim(),
-          role: 'member', // Default role for new invites
-          permissions: [permission.view_campaign, permission.view_ad], // Default permissions
-        }),
-      });
-
-      if (response.ok) {
-        toast.success('Invitation sent successfully');
-        setInviteEmail('');
-        fetchTeamMembers(); // Refresh the list
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to send invitation');
-      }
-    } catch (error) {
-      console.error('Failed to invite member:', error);
-      toast.error('Failed to send invitation');
-    }
+    inviteMutation.mutate({ email: inviteEmail.trim() });
   };
 
-  const handleRoleChange = async (userId: number, newRole: string) => {
+  const roleMutation = useMutation({
+    mutationFn: ({ userId, newRole }: { userId: number; newRole: string }) =>
+      TeamAPI.updateMember(currentTeam!.id, userId, {
+        role: newRole as TeamRole,
+        permissions:
+          newRole === 'admin'
+            ? [permission.view_campaign, permission.view_ad, permission.manage_team]
+            : [permission.view_campaign, permission.view_ad],
+      }),
+    onSuccess: () => {
+      toast.success('Member role updated');
+      if (currentTeam) queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to update role'),
+  });
+
+  const handleRoleChange = (userId: number, newRole: string) => {
     if (!currentTeam) return;
-
-    try {
-      const response = await fetch(`/api/teams/${currentTeam.id}/members/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          role: newRole,
-          permissions:
-            newRole === 'admin'
-              ? [
-                  permission.create_campaign,
-                  permission.edit_campaign,
-                  permission.delete_campaign,
-                  permission.view_campaign,
-                  permission.create_ad,
-                  permission.edit_ad,
-                  permission.delete_ad,
-                  permission.view_ad,
-                ]
-              : [permission.view_campaign, permission.view_ad],
-        }),
-      });
-
-      if (response.ok) {
-        toast.success('Member role updated');
-        fetchTeamMembers();
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to update role');
-      }
-    } catch (error) {
-      console.error('Failed to update role:', error);
-      toast.error('Failed to update role');
-    }
+    roleMutation.mutate({ userId, newRole });
   };
 
-  const handleRemoveMember = async (userId: number) => {
+  const removeMutation = useMutation({
+    mutationFn: (userId: number) => TeamAPI.removeMember(currentTeam!.id, userId),
+    onSuccess: () => {
+      toast.success('Member removed successfully');
+      if (currentTeam) queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to remove member'),
+  });
+
+  const handleRemoveMember = (userId: number) => {
     if (!currentTeam || !confirm('Are you sure you want to remove this member?')) return;
-
-    try {
-      const response = await fetch(`/api/teams/${currentTeam.id}/members/${userId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        toast.success('Member removed successfully');
-        fetchTeamMembers();
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to remove member');
-      }
-    } catch (error) {
-      console.error('Failed to remove member:', error);
-      toast.error('Failed to remove member');
-    }
+    removeMutation.mutate(userId);
   };
 
   const handleEditPermissions = (member: TeamMemberWithUser) => {
@@ -201,39 +159,25 @@ export default function TeamMembers() {
     );
   };
 
-  const handleSavePermissions = async () => {
+  const permissionsMutation = useMutation({
+    mutationFn: () =>
+      TeamAPI.updateMember(currentTeam!.id, selectedMember!.userId, {
+        role: selectedMember!.role,
+        permissions: editingPermissions,
+      }),
+    onSuccess: () => {
+      toast.success('Permissions updated successfully');
+      setEditPermissionsOpen(false);
+      setSelectedMember(null);
+      setEditingPermissions([]);
+      if (currentTeam) queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to update permissions'),
+  });
+
+  const handleSavePermissions = () => {
     if (!currentTeam || !selectedMember) return;
-
-    try {
-      const response = await fetch(
-        `/api/teams/${currentTeam.id}/members/${selectedMember.userId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            role: selectedMember.role,
-            permissions: editingPermissions,
-          }),
-        }
-      );
-
-      if (response.ok) {
-        toast.success('Permissions updated successfully');
-        setEditPermissionsOpen(false);
-        setSelectedMember(null);
-        setEditingPermissions([]);
-        fetchTeamMembers();
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to update permissions');
-      }
-    } catch (error) {
-      console.error('Failed to update permissions:', error);
-      toast.error('Failed to update permissions');
-    }
+    permissionsMutation.mutate();
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -278,9 +222,8 @@ export default function TeamMembers() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
-              Invite New Member
+              Add New Member
             </CardTitle>
-            <CardDescription>Send an invitation to add a new member to your team</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleInviteMember} className="flex gap-3">
@@ -292,21 +235,36 @@ export default function TeamMembers() {
                 className="flex-1"
                 required
               />
-              <Button type="submit" disabled={!inviteEmail.trim()}>
-                <Mail className="mr-2 h-4 w-4" />
-                Send Invite
+              <Button
+                type="submit"
+                disabled={!inviteEmail.trim() || (members?.length || 0) >= limits.maxMembersPerTeam}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Member
               </Button>
             </form>
           </CardContent>
+          {/* {!(members?.length < limits.maxMembersPerTeam) && ( */}
+          {members
+            ? members.length >= limits.maxMembersPerTeam
+            : true && (
+                <CardFooter>
+                  <p className="text-sm text-destructive">
+                    You have reached the maximum number of members for this team.
+                  </p>
+                </CardFooter>
+              )}
         </Card>
       )}
 
       {/* Members List */}
       <Card>
         <CardHeader>
-          <CardTitle>Team Members ({members?.length || 0})</CardTitle>
+          <CardTitle>
+            Team Members ({members?.length || 0}/{limits.maxMembersPerTeam})
+          </CardTitle>
           <CardDescription>
-            Current members of {currentTeam?.name || 'Unknown Team'}
+            Current members of team: {currentTeam?.name || 'Unknown Team'}
           </CardDescription>
         </CardHeader>
         <CardContent>

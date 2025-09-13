@@ -13,7 +13,7 @@ import { ChevronDown, Plus, Users } from 'lucide-react';
 import { CreateTeamModal } from '.';
 
 export function TeamSelector() {
-  const { teams, currentTeam, switchTeam } = useTeam();
+  const { teams, currentTeam, switchTeam, hasPermission, teamStats, loading } = useTeam();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   return (
@@ -55,7 +55,8 @@ export function TeamSelector() {
           {teams.length > 0 && <DropdownMenuSeparator />}
           <DropdownMenuItem
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2"
+            disabled={teamStats ? !teamStats.canCreateMore : false}
+            className="flex items-center gap-2 disabled:cursor-not-allowed"
           >
             <Plus className="h-4 w-4" />
             Create Team

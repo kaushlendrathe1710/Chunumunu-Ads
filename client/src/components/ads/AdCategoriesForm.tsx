@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,14 +48,8 @@ export const AdCategoriesForm: React.FC<AdCategoriesFormProps> = ({
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('https://chunumunu.com/api/categories');
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableCategories(data);
-      } else {
-        console.error('Failed to fetch categories');
-        toast.error('Failed to load categories');
-      }
+      const { data } = await axios.get('https://chunumunu.com/api/categories');
+      setAvailableCategories(data);
     } catch (error) {
       console.error('Error fetching categories:', error);
       toast.error('Failed to load categories');
@@ -65,14 +60,8 @@ export const AdCategoriesForm: React.FC<AdCategoriesFormProps> = ({
 
   const fetchPopularTags = async () => {
     try {
-      const response = await fetch('https://chunumunu.com/api/tags/popular');
-      if (response.ok) {
-        const data: PopularTag[] = await response.json();
-        setPopularTags(data.map((tag) => tag.name));
-      } else {
-        console.error('Failed to fetch popular tags');
-        toast.error('Failed to load popular tags');
-      }
+      const { data } = await axios.get<PopularTag[]>('https://chunumunu.com/api/tags/popular');
+      setPopularTags(data.map((tag) => tag.name));
     } catch (error) {
       console.error('Error fetching popular tags:', error);
       toast.error('Failed to load popular tags');

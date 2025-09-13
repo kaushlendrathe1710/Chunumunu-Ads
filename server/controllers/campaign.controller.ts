@@ -4,6 +4,12 @@ import { CampaignService } from '../db/services/campaign.service';
 import { WalletService } from '../db/services/wallet.service';
 import { AuthenticatedRequest } from '../types';
 import { permission } from '@shared/constants';
+import { deleteFileFromS3 } from '../config/s3';
+// Additional imports for new allocation / refund logic
+import { db } from '@server/db';
+import { ads } from '@server/db/schema';
+import { transactions } from '@server/db/schema/wallet.schema';
+import { and, eq } from 'drizzle-orm';
 
 // Validation schemas
 const createCampaignSchema = z.object({
@@ -76,14 +82,27 @@ export class CampaignController {
         userId
       );
 
-      // Deduct budget from wallet if specified and campaign is active
-      if (validation.data.budget && validation.data.status === 'active') {
-        await WalletService.deductCampaignBudget(
-          userId,
-          campaign.id,
-          validation.data.budget.toString(),
-          `Budget allocation for campaign: ${campaign.name}`
-        );
+      // Always deduct full campaign budget from wallet upon creation (allocation phase)
+      if (validation.data.budget) {
+        try {
+          await WalletService.deductCampaignBudget(
+            userId,
+            campaign.id,
+            validation.data.budget.toString(),
+            `Budget allocation for campaign: ${campaign.name}`
+          );
+        } catch (e) {
+          // If debit fails (e.g., race condition draining wallet) roll back campaign
+          try {
+            await CampaignService.deleteCampaign(campaign.id);
+          } catch (_) {
+            /* swallow */
+          }
+          if (e instanceof Error && e.message === 'Insufficient balance') {
+            return res.status(400).json({ error: 'Insufficient wallet balance' });
+          }
+          return res.status(500).json({ error: 'Failed to allocate campaign budget' });
+        }
       }
 
       res.status(201).json(campaign);
@@ -196,8 +215,25 @@ export class CampaignController {
       const spentAmount = parseFloat(campaign.spent || '0');
       const refundAmount = budgetAmount - spentAmount;
 
-      // Delete campaign and all its ads
+      // Fetch ads for S3 cleanup before DB deletion
+      const campaignAds = await CampaignService.getCampaignAds(parseInt(campaignId!));
+
+      // Delete campaign and all its ads (DB cascade handles ads rows)
       await CampaignService.deleteCampaign(parseInt(campaignId!));
+
+      // Best-effort S3 cleanup (non-blocking errors)
+      for (const ad of campaignAds) {
+        try {
+          if (ad.videoUrl) {
+            await deleteFileFromS3(ad.videoUrl);
+          }
+          if (ad.thumbnailUrl) {
+            await deleteFileFromS3(ad.thumbnailUrl);
+          }
+        } catch (e) {
+          console.warn('Failed to delete ad assets from S3 during campaign deletion', e);
+        }
+      }
 
       // Refund unused budget if any
       if (refundAmount > 0) {
@@ -238,16 +274,25 @@ export class CampaignController {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
 
-      // Check wallet balance if ad budget is specified
-      if (validation.data.budget) {
-        const wallet = await WalletService.getOrCreateWallet(userId);
-        const walletBalance = parseFloat(wallet.balance);
+      // Fetch campaign to validate allocation capacity
+      const campaign = await CampaignService.getCampaignById(parseInt(campaignId!));
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
 
-        if (walletBalance < validation.data.budget) {
+      // If ad has a budget we ensure it fits inside the campaign's remaining allocation.
+      if (validation.data.budget && campaign.budget) {
+        const campaignBudget = parseFloat(campaign.budget || '0');
+        // Sum existing ad budgets (allocation already done at campaign level so no wallet debit here)
+        const existingAds = await CampaignService.getCampaignAds(parseInt(campaignId!));
+        const allocated = existingAds.reduce((sum, a) => sum + parseFloat(a.budget || '0'), 0);
+        if (allocated + validation.data.budget > campaignBudget) {
           return res.status(400).json({
-            error: 'Insufficient wallet balance',
-            required: validation.data.budget,
-            available: walletBalance,
+            error: 'Insufficient remaining campaign budget',
+            allocated,
+            requested: validation.data.budget,
+            total: campaignBudget,
+            remaining: campaignBudget - allocated,
           });
         }
       }
@@ -260,17 +305,7 @@ export class CampaignController {
         },
         userId
       );
-
-      // Deduct ad budget from wallet if specified and ad is active
-      if (validation.data.budget && validation.data.status === 'active') {
-        await WalletService.deductAdBudget(
-          userId,
-          ad.id,
-          parseInt(campaignId!),
-          validation.data.budget.toString(),
-          `Budget allocation for ad: ${ad.title}`
-        );
-      }
+      // Ad creation no longer triggers a separate wallet debit. The campaign-level allocation covers ad budgets.
 
       res.status(201).json(ad);
     } catch (error) {
@@ -398,26 +433,39 @@ export class CampaignController {
       const spentAmount = parseFloat(ad.spent || '0');
       const refundAmount = budgetAmount - spentAmount;
 
-      // Delete ad and clean up associated files
+      // Delete ad (DB)
       await CampaignService.deleteAd(parseInt(adId!));
 
-      // TODO: Delete associated files from S3 if needed
-      // if (ad.videoUrl) {
-      //   await deleteFromS3(extractS3KeyFromUrl(ad.videoUrl));
-      // }
-      // if (ad.thumbnailUrl) {
-      //   await deleteFromS3(extractS3KeyFromUrl(ad.thumbnailUrl));
-      // }
+      // Attempt S3 cleanup (ignore failures)
+      try {
+        if (ad.videoUrl) {
+          await deleteFileFromS3(ad.videoUrl);
+        }
+        if (ad.thumbnailUrl) {
+          await deleteFileFromS3(ad.thumbnailUrl);
+        }
+      } catch (e) {
+        console.warn('Failed to delete ad media from S3', e);
+      }
 
-      // Refund unused budget if any
+      // Only refund to wallet if there was an original wallet debit for this ad (legacy ads before allocation change)
       if (refundAmount > 0) {
-        await WalletService.refundAdBudget(
-          userId,
-          parseInt(adId!),
-          parseInt(campaignId!),
-          refundAmount.toString(),
-          `Refund for deleted ad: ${ad.title}`
-        );
+        const legacyDebit = await db.query.transactions.findFirst({
+          where: and(
+            eq(transactions.adId, ad.id),
+            eq(transactions.type, 'debit'),
+            eq(transactions.status, 'completed')
+          ),
+        });
+        if (legacyDebit) {
+          await WalletService.refundAdBudget(
+            userId,
+            parseInt(adId!),
+            parseInt(campaignId!),
+            refundAmount.toString(),
+            `Refund for deleted ad: ${ad.title}`
+          );
+        }
       }
 
       res.json({

@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { userService } from '../db/services';
 import { InsertUser } from '@shared/types/index';
-import { uploadVideoToS3, deleteFileFromS3 } from '../config/s3';
+import { uploadVideoToS3, deleteFileFromS3, uploadAvatarToS3 } from '../config/s3';
 import { validateUsername } from '../utils/validation';
 import fs from 'fs';
 
@@ -33,8 +33,23 @@ export class UserController {
     if (avatar !== undefined) updates.avatar = avatar;
 
     try {
-      const updatedUser = await userService.updateUser(userId, updates);
+      // Fetch current user for comparison & existence
+      const currentUser = await userService.getUserById(userId);
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
 
+      // Username uniqueness (legacy endpoint parity with enhanced endpoint)
+      if (updates.username && updates.username !== currentUser.username) {
+        const existingWithUsername = await userService.getUserByUsername(updates.username);
+        if (existingWithUsername) {
+          return res.status(400).json({
+            message: 'Username already exists. Please choose a different username.',
+          });
+        }
+      }
+
+      const updatedUser = await userService.updateUser(userId, updates);
       if (!updatedUser) {
         return res.status(404).json({ message: 'User not found' });
       }
@@ -105,14 +120,18 @@ export class UserController {
         }
 
         try {
-          // Upload file to S3 using the existing uploadVideoToS3 function
-          const newAvatarUrl = await uploadVideoToS3(filePath, originalname);
+          // Prefer dedicated avatar uploader with stable key structure
+          const newAvatarUrl = await uploadAvatarToS3(filePath, originalname, userId);
 
           // Log successful upload for monitoring
           console.log(`Avatar uploaded successfully by user ${userId}: ${originalname}`);
 
-          // Delete old avatar from S3 if it exists and is different from new one
-          if (currentUser.avatar && currentUser.avatar !== newAvatarUrl) {
+          // Delete old avatar if path changed (exclude dicebear/external URLs)
+          if (
+            currentUser.avatar &&
+            currentUser.avatar !== newAvatarUrl &&
+            currentUser.avatar.includes('.amazonaws.com/')
+          ) {
             try {
               await deleteFileFromS3(currentUser.avatar);
               console.log(`Old avatar deleted from S3: ${currentUser.avatar}`);

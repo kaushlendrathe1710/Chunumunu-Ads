@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { useAppDispatch } from '@/store';
-import { createTeam } from '@/store/slices/teamSlice';
+import { useTeam } from '@/hooks/useTeam';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,6 +13,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'react-toastify';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import TeamAPI from '@/api/teamApi';
+import { QK } from '@/api/queryKeys';
 
 interface CreateTeamModalProps {
   open: boolean;
@@ -21,13 +23,36 @@ interface CreateTeamModalProps {
 }
 
 export function CreateTeamModal({ open, onOpenChange }: CreateTeamModalProps) {
-  const dispatch = useAppDispatch();
-  const [loading, setLoading] = useState(false);
+  const { teamStats } = useTeam();
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     avatar: '',
   });
+
+  const createMutation = useMutation({
+    mutationFn: (payload: { name: string; description?: string; avatar?: string }) =>
+      TeamAPI.createTeam(payload as any),
+    onSuccess: () => {
+      toast.success('Team created successfully');
+      queryClient.invalidateQueries({ queryKey: QK.teams() });
+      queryClient.invalidateQueries({ queryKey: QK.teamStats() });
+      setFormData({ name: '', description: '', avatar: '' });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      if (error?.code === 'TEAM_LIMIT_EXCEEDED') {
+        toast.error(
+          `You've reached the maximum limit of ${teamStats?.maxTeamsAllowed || 5} teams.`
+        );
+      } else {
+        toast.error(error?.message || 'Failed to create team');
+      }
+    },
+  });
+
+  const canCreateTeam = teamStats?.canCreateMore ?? true;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,26 +62,11 @@ export function CreateTeamModal({ open, onOpenChange }: CreateTeamModalProps) {
       return;
     }
 
-    setLoading(true);
-
-    try {
-      await dispatch(
-        createTeam({
-          name: formData.name.trim(),
-          description: formData.description.trim() || undefined,
-          avatar: formData.avatar.trim() || undefined,
-        })
-      ).unwrap();
-
-      toast.success('Team created successfully');
-
-      setFormData({ name: '', description: '', avatar: '' });
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create team');
-    } finally {
-      setLoading(false);
-    }
+    createMutation.mutate({
+      name: formData.name.trim(),
+      description: formData.description.trim() || undefined,
+      avatar: formData.avatar.trim() || undefined,
+    });
   };
 
   const handleInputChange = (field: keyof typeof formData, value: string) => {
@@ -70,6 +80,20 @@ export function CreateTeamModal({ open, onOpenChange }: CreateTeamModalProps) {
           <DialogTitle>Create Team</DialogTitle>
           <DialogDescription>
             Create a new team to organize your campaigns and ads.
+            {teamStats && (
+              <div className="mt-2 text-sm">
+                <span
+                  className={`font-medium ${!canCreateTeam ? 'text-red-600' : 'text-blue-600'}`}
+                >
+                  {teamStats.ownedTeams}/{teamStats.maxTeamsAllowed} teams created
+                </span>
+                {!canCreateTeam && (
+                  <div className="mt-1 text-red-600">
+                    You've reached the maximum limit of {teamStats.maxTeamsAllowed} teams.
+                  </div>
+                )}
+              </div>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -113,8 +137,11 @@ export function CreateTeamModal({ open, onOpenChange }: CreateTeamModalProps) {
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !formData.name.trim()}>
-              {loading ? 'Creating...' : 'Create Team'}
+            <Button
+              type="submit"
+              disabled={createMutation.isPending || !formData.name.trim() || !canCreateTeam}
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Team'}
             </Button>
           </DialogFooter>
         </form>

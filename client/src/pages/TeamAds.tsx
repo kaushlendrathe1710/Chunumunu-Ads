@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTeam } from '@/hooks/useTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,91 +17,83 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, MoreVertical, Play, Pause, Eye, AlertCircle } from 'lucide-react';
+import { Plus, MoreVertical, Play, Pause, Eye, Trash2, Filter } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { CreateAdDialog } from '@/components/ads';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { DialogFooter } from '@/components/ui/dialog';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import AdAPI, { AdDto } from '@/api/adApi';
+import CampaignAPI from '@/api/campaignApi';
+import { QK } from '@/api/queryKeys';
 
-interface Ad {
-  id: string;
-  title: string;
-  description?: string;
-  categories: string[];
-  tags: string[];
-  ctaLink?: string;
-  videoUrl: string;
-  thumbnailUrl?: string;
-  status: 'draft' | 'active' | 'paused' | 'completed' | 'rejected' | 'under_review';
-  budget?: number;
-  spent: number;
-  impressions: number;
-  clicks: number;
-  conversions: number;
-  campaignId: string;
-  campaignName: string;
-  createdAt: string;
-  updatedAt: string;
-}
+type Ad = AdDto & { campaignName?: string };
 
 export default function TeamAds() {
   const { currentTeam, userRole, hasPermission } = useTeam();
-  const [ads, setAds] = useState<Ad[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [ads, setAds] = useState<Ad[]>([]); // local for derived addition of campaignName if needed
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [campaigns, setCampaigns] = useState<{ id: number; name: string }[]>([]);
+  const [selectedCampaign, setSelectedCampaign] = useState<string>('all');
+  const [deleteTarget, setDeleteTarget] = useState<Ad | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (currentTeam) {
-      fetchAds();
-    }
-  }, [currentTeam]);
+  const campaignsQuery = useQuery<AdDto[] | any[]>({
+    queryKey: currentTeam ? QK.campaigns(currentTeam.id) : ['campaigns', 'noop'],
+    queryFn: () => (currentTeam ? CampaignAPI.list(currentTeam.id) : Promise.resolve([])),
+    enabled: !!currentTeam,
+  });
+  if (campaignsQuery.data && campaigns.length === 0) {
+    setCampaigns((campaignsQuery.data as any[]).map((c: any) => ({ id: c.id, name: c.name })));
+  }
 
-  const fetchAds = async () => {
+  const adsQuery = useQuery<AdDto[]>({
+    queryKey: currentTeam ? QK.ads(currentTeam.id, selectedCampaign) : ['ads', 'noop'],
+    queryFn: async () => {
+      if (!currentTeam) return [] as AdDto[];
+      if (selectedCampaign === 'all') return AdAPI.listTeamAds(currentTeam.id);
+      return AdAPI.listCampaignAds(currentTeam.id, selectedCampaign);
+    },
+    enabled: !!currentTeam,
+  });
+  if (adsQuery.data && adsQuery.data !== ads) {
+    setAds(adsQuery.data as any);
+  }
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ ad, status }: { ad: Ad; status: string }) =>
+      AdAPI.update(currentTeam!.id, ad.campaignId, ad.id, { status: status as any }),
+    onSuccess: () => {
+      toast.success('Ad status updated');
+      if (currentTeam) queryClient.invalidateQueries({ queryKey: QK.ads(currentTeam.id) });
+    },
+    onError: () => toast.error('Failed to update ad'),
+  });
+
+  const handleStatusChange = (ad: Ad, newStatus: string) => {
     if (!currentTeam) return;
-
-    try {
-      const response = await fetch(`/api/teams/${currentTeam.id}/ads`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAds(data.ads || []);
-      } else {
-        console.error('Failed to fetch ads:', response.status);
-        setAds([]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch ads:', error);
-      toast.error('Failed to load ads');
-      setAds([]);
-    } finally {
-      setLoading(false);
-    }
+    updateStatusMutation.mutate({ ad, status: newStatus });
   };
 
-  const handleStatusChange = async (adId: string, newStatus: string) => {
-    if (!currentTeam) return;
+  const deleteMutation = useMutation({
+    mutationFn: () => AdAPI.remove(currentTeam!.id, deleteTarget!.campaignId, deleteTarget!.id),
+    onSuccess: () => {
+      toast.success('Ad deleted');
+      setDeleteTarget(null);
+      if (currentTeam) queryClient.invalidateQueries({ queryKey: QK.ads(currentTeam.id) });
+    },
+    onError: () => toast.error('Failed to delete ad'),
+  });
 
-    try {
-      const response = await fetch(`/api/teams/${currentTeam.id}/ads/${adId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (response.ok) {
-        toast.success('Ad status updated');
-        fetchAds();
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to update ad');
-      }
-    } catch (error) {
-      console.error('Failed to update ad:', error);
-      toast.error('Failed to update ad');
-    }
+  const handleDeleteAd = () => {
+    if (!currentTeam || !deleteTarget) return;
+    deleteMutation.mutate();
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -150,42 +142,59 @@ export default function TeamAds() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Team Ads</h1>
           <p className="text-gray-600">Manage your advertising content</p>
         </div>
-
-        {canManageAds && (
-          <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Ad
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create New Ad</DialogTitle>
-              </DialogHeader>
-              <ScrollArea className="max-h-[calc(90vh-120px)]">
-                <CreateAdDialog
-                  teamId={currentTeam.id}
-                  onSuccess={() => {
-                    setCreateModalOpen(false);
-                    fetchAds();
-                  }}
-                  onCancel={() => setCreateModalOpen(false)}
-                />
-              </ScrollArea>
-            </DialogContent>
-          </Dialog>
-        )}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All Campaigns" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Campaigns</SelectItem>
+                {campaigns.map((c) => (
+                  <SelectItem key={c.id} value={c.id.toString()}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {canManageAds && (
+            <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Ad
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[90vh] max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Create New Ad</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="max-h-[calc(90vh-120px)]">
+                  <CreateAdDialog
+                    teamId={currentTeam.id}
+                    onSuccess={() => {
+                      setCreateModalOpen(false);
+                      // React Query invalidation handled inside dialog component
+                    }}
+                    onCancel={() => setCreateModalOpen(false)}
+                  />
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
       </div>
 
       {/* Ads List */}
       <div className="grid gap-6">
-        {loading ? (
+        {adsQuery.isLoading ? (
           <Card>
             <CardContent className="pt-6 text-center">
               <p className="text-gray-500">Loading ads...</p>
@@ -239,19 +248,19 @@ export default function TeamAds() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {ad.status === 'draft' && (
-                          <DropdownMenuItem onClick={() => handleStatusChange(ad.id, 'active')}>
+                          <DropdownMenuItem onClick={() => handleStatusChange(ad, 'active')}>
                             <Play className="mr-2 h-4 w-4" />
                             Activate Ad
                           </DropdownMenuItem>
                         )}
                         {ad.status === 'active' && (
-                          <DropdownMenuItem onClick={() => handleStatusChange(ad.id, 'paused')}>
+                          <DropdownMenuItem onClick={() => handleStatusChange(ad, 'paused')}>
                             <Pause className="mr-2 h-4 w-4" />
                             Pause Ad
                           </DropdownMenuItem>
                         )}
                         {ad.status === 'paused' && (
-                          <DropdownMenuItem onClick={() => handleStatusChange(ad.id, 'active')}>
+                          <DropdownMenuItem onClick={() => handleStatusChange(ad, 'active')}>
                             <Play className="mr-2 h-4 w-4" />
                             Resume Ad
                           </DropdownMenuItem>
@@ -259,6 +268,12 @@ export default function TeamAds() {
                         <DropdownMenuItem>
                           <Eye className="mr-2 h-4 w-4" />
                           View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-red-600"
+                          onClick={() => setDeleteTarget(ad)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -301,26 +316,30 @@ export default function TeamAds() {
                   {ad.budget && (
                     <div className="text-center">
                       <p className="text-xl font-bold text-green-600">
-                        {formatCurrency(ad.budget)}
+                        {formatCurrency(Number(ad.budget))}
                       </p>
                       <p className="text-sm text-gray-500">Budget</p>
                     </div>
                   )}
 
                   <div className="text-center">
-                    <p className="text-xl font-bold text-red-600">{formatCurrency(ad.spent)}</p>
+                    <p className="text-xl font-bold text-red-600">
+                      {formatCurrency(Number(ad.spent || 0))}
+                    </p>
                     <p className="text-sm text-gray-500">Spent</p>
                   </div>
 
                   <div className="text-center">
                     <p className="text-xl font-bold text-blue-600">
-                      {formatNumber(ad.impressions)}
+                      {formatNumber(Number(ad.impressions || 0))}
                     </p>
                     <p className="text-sm text-gray-500">Impressions</p>
                   </div>
 
                   <div className="text-center">
-                    <p className="text-xl font-bold text-purple-600">{formatNumber(ad.clicks)}</p>
+                    <p className="text-xl font-bold text-purple-600">
+                      {formatNumber(Number(ad.clicks || 0))}
+                    </p>
                     <p className="text-sm text-gray-500">Clicks</p>
                   </div>
                 </div>
@@ -337,6 +356,26 @@ export default function TeamAds() {
           ))
         )}
       </div>
+      {/* Delete Ad Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Ad</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete ad "{deleteTarget?.title}"? This action cannot be
+            undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAd}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

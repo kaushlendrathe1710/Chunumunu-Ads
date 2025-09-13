@@ -9,14 +9,17 @@ import {
   TeamRole,
   Permission,
 } from '@shared/types';
-import { eq, and } from 'drizzle-orm';
+import { limits } from '@shared/constants';
+import { eq, and, count } from 'drizzle-orm';
 
 export class TeamService {
   static async createTeam(teamData: InsertTeam, ownerId: number) {
-    // Check team limit first
-    const userTeamsCount = await this.getUserTeamsCount(ownerId);
-    if (userTeamsCount >= 5) {
-      throw new Error('Maximum team limit reached. You can create up to 5 teams.');
+    // Check team limit first - count teams where user is the owner
+    const userTeamsCount = await this.getUserOwnedTeamsCount(ownerId);
+    if (userTeamsCount >= limits.maxTeamsPerUser) {
+      throw new Error(
+        `Maximum team limit reached. You can create up to ${limits.maxTeamsPerUser} teams.`
+      );
     }
 
     const result = await db.transaction(async (tx) => {
@@ -44,10 +47,35 @@ export class TeamService {
   }
 
   static async getUserTeamsCount(userId: number): Promise<number> {
-    const result = await db.query.teamMembers.findMany({
-      where: eq(teamMembers.userId, userId),
-    });
-    return result.length;
+    const result = await db
+      .select({ count: count() })
+      .from(teamMembers)
+      .where(eq(teamMembers.userId, userId));
+    return result[0].count;
+  }
+
+  static async getUserOwnedTeamsCount(userId: number): Promise<number> {
+    const result = await db.select({ count: count() }).from(teams).where(eq(teams.ownerId, userId));
+    return result[0].count;
+  }
+
+  static async getUserTeamStats(userId: number): Promise<{
+    totalTeams: number;
+    ownedTeams: number;
+    maxTeamsAllowed: number;
+    canCreateMore: boolean;
+  }> {
+    const [totalTeams, ownedTeams] = await Promise.all([
+      this.getUserTeamsCount(userId),
+      this.getUserOwnedTeamsCount(userId),
+    ]);
+
+    return {
+      totalTeams,
+      ownedTeams,
+      maxTeamsAllowed: limits.maxTeamsPerUser,
+      canCreateMore: ownedTeams < limits.maxTeamsPerUser,
+    };
   }
 
   static async getTeamById(teamId: number): Promise<TeamWithOwner | null> {
@@ -82,6 +110,9 @@ export class TeamService {
                 avatar: true,
               },
             },
+            members: {
+              columns: { id: true },
+            },
           },
         },
       },
@@ -91,10 +122,22 @@ export class TeamService {
       ...member.team,
       userRole: member.role,
       userPermissions: member.permissions || [],
-    }));
+      memberCount: member.team.members?.length || 1,
+    })) as any;
   }
 
   static async addTeamMember(memberData: InsertTeamMember) {
+    // Enforce team member limit (including owner) before adding
+    const currentCountResult = await db
+      .select({ count: count() })
+      .from(teamMembers)
+      .where(eq(teamMembers.teamId, memberData.teamId));
+    const currentCount = currentCountResult[0].count;
+    if (currentCount >= limits.maxMembersPerTeam) {
+      throw new Error(
+        `Maximum members limit reached. A team can have up to ${limits.maxMembersPerTeam} members.`
+      );
+    }
     const [member] = await db.insert(teamMembers).values(memberData).returning();
     return member;
   }

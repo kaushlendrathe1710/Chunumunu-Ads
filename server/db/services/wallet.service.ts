@@ -137,6 +137,14 @@ export class WalletService {
     return transactionHistory;
   }
 
+  static async getTransactionCount(walletId: number) {
+    const result = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(transactions)
+      .where(eq(transactions.walletId, walletId));
+    return result[0]?.count || 0;
+  }
+
   static async getTransactionById(transactionId: number) {
     const transaction = await db.query.transactions.findFirst({
       where: eq(transactions.id, transactionId),

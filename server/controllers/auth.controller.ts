@@ -106,6 +106,7 @@ export class AuthController {
           email: user.email,
           username: user.username,
           avatar: user.avatar,
+          bio: user.bio,
           role: user.role,
           isVerified: user.isVerified,
         },
@@ -163,6 +164,7 @@ export class AuthController {
           email: user.email,
           username: user.username,
           avatar: user.avatar,
+          bio: user.bio,
           role: user.role,
           isVerified: user.isVerified,
         },
@@ -175,6 +177,7 @@ export class AuthController {
           email: user.email,
           username: user.username,
           avatar: user.avatar,
+          bio: user.bio,
           role: user.role,
           isVerified: user.isVerified,
         },
@@ -216,8 +219,7 @@ export class AuthController {
 
       if (!user) {
         // Create new user with Google data
-        // @ts-ignore
-        user = await createUser({
+        user = await userService.createUser({
           email: googleUser.email,
           username: googleUser.name || googleUser.email.split('@')[0],
           avatar:

@@ -112,19 +112,19 @@ export default function VerifyOtp() {
   if (authLoading || isAlreadyAuth) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-16 w-16 animate-spin rounded-full border-4 border-gray-200 border-t-primary dark:border-gray-800"></div>
+        <div className="h-16 w-16 animate-spin rounded-full border-4 border-border border-t-primary"></div>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <Card className="mx-4 w-full max-w-md bg-white dark:bg-gray-800">
+      <Card className="mx-4 w-full max-w-md bg-card">
         <CardContent className="px-8 pb-8 pt-6">
           <div className="mb-6 flex flex-col items-center text-center">
             <img src={logo} alt="Logo" className="h-10 w-10" />
             <h1 className="mt-2 text-2xl font-bold">Verify your email</h1>
-            <p className="mt-1 text-gray-600 dark:text-gray-400">
+            <p className="mt-1 text-muted-foreground">
               We've sent a 6-digit code to {email}
             </p>
           </div>
@@ -137,7 +137,7 @@ export default function VerifyOtp() {
             <div className="flex justify-between text-sm">
               <Button
                 variant="link"
-                className="text-[#3EA6FF]"
+                className="text-primary"
                 onClick={handleResendOtp}
                 disabled={countdown > 0 || isLoading}
               >
@@ -148,7 +148,7 @@ export default function VerifyOtp() {
 
             <Button
               type="submit"
-              className="w-full rounded-lg bg-[#3EA6FF] py-2 font-medium text-white disabled:opacity-50"
+              className="w-full rounded-lg bg-primary py-2 font-medium text-foreground disabled:opacity-50"
               disabled={isLoading || otp.length !== 6}
             >
               {isLoading ? 'Verifying...' : 'Verify'}

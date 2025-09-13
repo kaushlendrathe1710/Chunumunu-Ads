@@ -107,7 +107,10 @@ export class WalletController {
       const offset = (pageNum - 1) * limitNum;
 
       const wallet = await WalletService.getOrCreateWallet(userId);
-      const transactions = await WalletService.getTransactionHistory(wallet.id, limitNum, offset);
+      const [transactions, totalCount] = await Promise.all([
+        WalletService.getTransactionHistory(wallet.id, limitNum, offset),
+        WalletService.getTransactionCount(wallet.id),
+      ]);
 
       res.json({
         transactions: transactions.map((transaction) => ({
@@ -124,7 +127,9 @@ export class WalletController {
         pagination: {
           page: pageNum,
           limit: limitNum,
-          hasMore: transactions.length === limitNum,
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limitNum) || 1,
+          hasMore: pageNum * limitNum < totalCount,
         },
       });
     } catch (error) {

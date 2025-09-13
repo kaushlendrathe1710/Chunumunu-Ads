@@ -5,6 +5,12 @@ import { AdBasicInfoForm } from './AdBasicInfoForm';
 import { AdCategoriesForm } from './AdCategoriesForm';
 import { AdVideoUploadForm } from './AdVideoUploadForm';
 import { AdBudgetForm } from './AdBudgetForm';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import CampaignAPI, { CampaignDto } from '@/api/campaignApi';
+import AdAPI from '@/api/adApi';
+import { adSchema } from '@/utils/schemas';
+import { z } from 'zod';
+import { QK } from '@/api/queryKeys';
 
 interface CreateAdDialogProps {
   teamId: number;
@@ -36,7 +42,6 @@ interface AdFormData {
 
 export const CreateAdDialog: React.FC<CreateAdDialogProps> = ({ teamId, onSuccess, onCancel }) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const [videoFile, setVideoFile] = useState<UploadedFile | null>(null);
@@ -52,100 +57,80 @@ export const CreateAdDialog: React.FC<CreateAdDialogProps> = ({ teamId, onSucces
     campaignId: '',
   });
 
+  const campaignsQuery = useQuery<CampaignDto[]>({
+    queryKey: QK.campaigns(teamId),
+    queryFn: () => CampaignAPI.list(teamId) as Promise<CampaignDto[]>,
+    enabled: !!teamId,
+    placeholderData: (prev) => prev, // keep old campaigns while refetching
+  });
+
   useEffect(() => {
-    fetchCampaigns();
-  }, [teamId]);
-
-  const fetchCampaigns = async () => {
-    try {
-      const response = await fetch(`/api/teams/${teamId}/campaigns`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCampaigns(data.campaigns || []);
-      } else {
-        console.error('Failed to fetch campaigns');
-        setCampaigns([]);
+    if (campaignsQuery.data) {
+      const mapped = campaignsQuery.data.map((c) => ({ id: c.id, name: c.name }));
+      // Only update if actually changed (shallow compare length + ids)
+      if (
+        mapped.length !== campaigns.length ||
+        mapped.some((m, i) => campaigns[i]?.id !== m.id || campaigns[i]?.name !== m.name)
+      ) {
+        setCampaigns(mapped);
+        // Auto-select if only one campaign and none chosen
+        if (mapped.length === 1 && !formData.campaignId) {
+          setFormData((f) => ({ ...f, campaignId: String(mapped[0].id) }));
+        }
       }
-    } catch (error) {
-      console.error('Failed to fetch campaigns:', error);
-      setCampaigns([]);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [campaignsQuery.data, campaigns.length, formData.campaignId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validation
-    if (!formData.title.trim()) {
-      toast.error('Please enter a title');
+    if (!videoFile || !thumbnailFile) {
+      toast.error('Upload video and thumbnail');
       return;
     }
 
-    if (formData.categories.length === 0) {
-      toast.error('Please select at least one category');
-      return;
-    }
-
-    if (!videoFile) {
-      toast.error('Please upload a video');
-      return;
-    }
-
-    if (!thumbnailFile) {
-      toast.error('Please upload a thumbnail');
-      return;
-    }
-
-    if (!formData.campaignId) {
-      toast.error('Please select a campaign');
+    const parseResult = adSchema.safeParse({
+      ...formData,
+      videoUrl: videoFile?.finalUrl || '',
+      thumbnailUrl: thumbnailFile?.finalUrl || '',
+    });
+    if (!parseResult.success) {
+      toast.error(parseResult.error.errors[0].message);
       return;
     }
 
     setSubmitting(true);
-
-    try {
-      const adData = {
-        title: formData.title,
-        description: formData.description,
-        categories: formData.categories,
-        tags: formData.tags,
-        ctaLink: formData.ctaLink,
-        videoUrl: videoFile.finalUrl,
-        thumbnailUrl: thumbnailFile.finalUrl,
-        budget: formData.budget,
-        campaignId: parseInt(formData.campaignId),
-      };
-
-      const response = await fetch(`/api/teams/${teamId}/campaigns/${formData.campaignId}/ads`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(adData),
-      });
-
-      if (response.ok) {
-        toast.success('Ad created successfully');
-        onSuccess();
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to create ad');
-      }
-    } catch (error) {
-      console.error('Failed to create ad:', error);
-      toast.error('Failed to create ad');
-    } finally {
-      setSubmitting(false);
-    }
+    const payload = {
+      title: formData.title,
+      description: formData.description,
+      categories: formData.categories,
+      tags: formData.tags,
+      ctaLink: formData.ctaLink,
+      videoUrl: videoFile.finalUrl,
+      thumbnailUrl: thumbnailFile.finalUrl,
+      budget: formData.budget,
+      campaignId: parseInt(formData.campaignId),
+    };
+    createMutation.mutate(payload as any);
   };
 
-  if (loading) {
+  const queryClient = useQueryClient();
+  const createMutation = useMutation({
+    mutationFn: (payload: any) => AdAPI.create(teamId, payload.campaignId, payload),
+    onSuccess: () => {
+      toast.success('Ad created successfully');
+      queryClient.invalidateQueries({ queryKey: QK.ads(teamId) });
+      onSuccess();
+      setSubmitting(false);
+    },
+    onError: (e: any) => {
+      toast.error(e.message || 'Failed to create ad');
+      setSubmitting(false);
+    },
+  });
+
+  if (campaignsQuery.isLoading && !campaigns.length) {
     return (
       <div className="p-6 text-center">
         <p className="text-gray-500">Loading...</p>

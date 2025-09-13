@@ -10,7 +10,6 @@ export function registerUserRoutes(app: Express): void {
     authenticate,
     profileImageUpload.fields([
       { name: 'avatar', maxCount: 1 },
-      { name: 'channelBanner', maxCount: 1 },
     ]),
     UserController.updateUserProfile
   );

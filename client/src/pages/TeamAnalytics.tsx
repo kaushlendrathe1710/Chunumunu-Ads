@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useTeam } from '@/hooks/useTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useQuery } from '@tanstack/react-query';
+import { QK } from '@/api/queryKeys';
+import AnalyticsAPI, { TeamAnalyticsDto } from '@/api/analyticsApi';
 import {
   BarChart3,
   TrendingUp,
@@ -12,78 +15,18 @@ import {
   Users,
 } from 'lucide-react';
 
-interface TeamAnalytics {
-  totalCampaigns: number;
-  activeCampaigns: number;
-  totalBudget: number;
-  totalSpent: number;
-  totalImpressions: number;
-  totalClicks: number;
-  averageCTR: number;
-  averageCPC: number;
-  topCampaigns: Array<{
-    id: string;
-    name: string;
-    impressions: number;
-    clicks: number;
-    spent: number;
-  }>;
-}
+type TeamAnalytics = TeamAnalyticsDto;
 
 export default function TeamAnalytics() {
   const { currentTeam, userRole, hasPermission } = useTeam();
-  const [analytics, setAnalytics] = useState<TeamAnalytics | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (currentTeam) {
-      fetchAnalytics();
-    }
-  }, [currentTeam]);
-
-  const fetchAnalytics = async () => {
-    if (!currentTeam) return;
-
-    try {
-      const response = await fetch(`/api/teams/${currentTeam.id}/analytics`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAnalytics(data);
-      } else {
-        // If endpoint doesn't exist yet, show placeholder data
-        setAnalytics({
-          totalCampaigns: 0,
-          activeCampaigns: 0,
-          totalBudget: 0,
-          totalSpent: 0,
-          totalImpressions: 0,
-          totalClicks: 0,
-          averageCTR: 0,
-          averageCPC: 0,
-          topCampaigns: [],
-        });
-      }
-    } catch (error) {
-      console.error('Failed to fetch analytics:', error);
-      // Show placeholder data on error
-      setAnalytics({
-        totalCampaigns: 0,
-        activeCampaigns: 0,
-        totalBudget: 0,
-        totalSpent: 0,
-        totalImpressions: 0,
-        totalClicks: 0,
-        averageCTR: 0,
-        averageCPC: 0,
-        topCampaigns: [],
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: analytics, isLoading: loading } = useQuery({
+    queryKey: currentTeam ? QK.analytics(currentTeam.id) : ['team', 'analytics', 'noop'],
+    queryFn: () =>
+      currentTeam ? AnalyticsAPI.getTeamAnalytics(currentTeam.id) : Promise.resolve(undefined),
+    enabled: !!currentTeam,
+    retry: 1,
+    staleTime: 60_000,
+  });
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {

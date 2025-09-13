@@ -2,6 +2,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocation } from 'wouter';
 import { toast } from 'react-toastify';
+import { apiClient } from '@/api/apiClient';
 
 export default function GoogleSignIn() {
   const { updateUser } = useAuth();
@@ -19,23 +20,7 @@ export default function GoogleSignIn() {
 
         console.log('Sending request body:', requestBody);
 
-        const result = await fetch('/api/auth/google', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        console.log('Response status:', result.status);
-
-        if (!result.ok) {
-          const errorData = await result.json();
-          console.error('Server error:', errorData);
-          throw new Error(errorData.message || 'Failed to authenticate with Google');
-        }
-
-        const data = await result.json();
+        const { data } = await apiClient.post('/auth/google', requestBody);
         console.log('Success response:', data);
 
         // Store user data in localStorage
@@ -54,13 +39,13 @@ export default function GoogleSignIn() {
         }
 
         // Update auth state via hook (which dispatches proper actions)
-        updateUser(data.user);
+        updateUser((data as any).user);
 
         // Show success message
         toast.success('Successfully signed in with Google!');
 
         // Redirect based on user role
-        if (data.user.isAdmin) {
+        if ((data as any).user.isAdmin) {
           setLocation('/admin');
         } else {
           setLocation('/');

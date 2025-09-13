@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Upload, Video, Image, X, CheckCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { getPresignedUploadUrl } from '@/api/uploadApi';
 
 interface UploadedFile {
   file: File;
@@ -43,27 +44,7 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
     fileName: string,
     contentType: string,
     fileType: 'video' | 'thumbnail'
-  ) => {
-    const response = await fetch('/api/upload/presigned-url', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({
-        fileName,
-        contentType,
-        fileType,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to get upload URL');
-    }
-
-    return response.json();
-  };
+  ) => getPresignedUploadUrl(fileName, contentType, fileType);
 
   const uploadToS3 = async (
     file: File,

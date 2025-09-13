@@ -20,37 +20,63 @@ export class TeamController {
       }
 
       const validatedData = insertTeamSchema.parse(req.body);
-      const team = await TeamService.createTeam(validatedData, userId);
 
-      // Return team with user role and permissions (owner has all permissions)
-      const teamWithUserRole = {
-        ...team,
-        owner: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          avatar: user.avatar,
-        },
-        userRole: 'owner' as const,
-        userPermissions: [
-          'create_campaign',
-          'edit_campaign',
-          'delete_campaign',
-          'view_campaign',
-          'create_ad',
-          'edit_ad',
-          'delete_ad',
-          'view_ad',
-          'manage_team',
-        ] as const,
-      };
+      try {
+        const team = await TeamService.createTeam(validatedData, userId);
 
-      res.status(201).json({ team: teamWithUserRole });
+        // Return team with user role and permissions (owner has all permissions)
+        const teamWithUserRole = {
+          ...team,
+          owner: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            avatar: user.avatar,
+          },
+          userRole: 'owner' as const,
+          userPermissions: [
+            'create_campaign',
+            'edit_campaign',
+            'delete_campaign',
+            'view_campaign',
+            'create_ad',
+            'edit_ad',
+            'delete_ad',
+            'view_ad',
+            'manage_team',
+          ] as const,
+        };
+
+        res.status(201).json({ team: teamWithUserRole });
+      } catch (teamError: any) {
+        if (teamError.message.includes('Maximum team limit reached')) {
+          return res.status(400).json({
+            error: teamError.message,
+            code: 'TEAM_LIMIT_EXCEEDED',
+          });
+        }
+        throw teamError;
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid data', details: error.errors });
       }
       console.error('Error creating team:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async getUserTeamStats(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const stats = await TeamService.getUserTeamStats(userId);
+      res.json({ stats });
+    } catch (error) {
+      console.error('Error fetching team stats:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -126,15 +152,24 @@ export class TeamController {
         return res.status(400).json({ error: 'User is already a team member' });
       }
 
-      // Add member to team
-      const member = await TeamService.addTeamMember({
-        teamId,
-        userId: targetUser.id,
-        role: validatedData.role,
-        permissions: validatedData.permissions,
-      });
-
-      res.status(201).json({ member });
+      try {
+        // Add member to team (will enforce member limit inside service)
+        const member = await TeamService.addTeamMember({
+          teamId,
+          userId: targetUser.id,
+          role: validatedData.role,
+          permissions: validatedData.permissions,
+        });
+        res.status(201).json({ member });
+      } catch (e: any) {
+        if (e.message?.includes('Maximum members limit')) {
+          return res.status(400).json({
+            error: e.message,
+            code: 'TEAM_MEMBER_LIMIT_EXCEEDED',
+          });
+        }
+        throw e;
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid data', details: error.errors });
@@ -289,6 +324,29 @@ export class TeamController {
         return res.status(400).json({ error: 'Invalid data', details: error.errors });
       }
       console.error('Error updating team:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async deleteTeam(req: AuthenticatedRequest, res: Response) {
+    try {
+      const teamId = parseInt(req.params.teamId);
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Ensure user is owner (only owners can delete teams)
+      const membership = await TeamService.getUserTeamMembership(teamId, userId);
+      if (!membership || membership.role !== 'owner') {
+        return res.status(403).json({ error: 'Only team owner can delete the team' });
+      }
+
+      await TeamService.deleteTeam(teamId);
+      res.status(200).json({ message: 'Team deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting team:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

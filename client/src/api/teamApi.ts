@@ -6,84 +6,49 @@ import {
   TeamRole,
   PermissionCheckResponse,
 } from '@shared/types';
-
-const API_BASE = '/api';
+import { apiClient } from './apiClient';
 
 class TeamAPI {
   // Teams
   static async getUserTeams(): Promise<TeamWithOwner[]> {
-    const response = await fetch(`${API_BASE}/teams`, {
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch teams');
-    }
-
-    const data = await response.json();
+    const { data } = await apiClient.get<{ teams: TeamWithOwner[] }>('/teams/user-teams');
     return data.teams;
   }
 
+  static async getUserTeamStats(): Promise<{
+    totalTeams: number;
+    ownedTeams: number;
+    maxTeamsAllowed: number;
+    canCreateMore: boolean;
+  }> {
+    const { data } = await apiClient.get<{ stats: any }>('/teams/stats');
+    return data.stats;
+  }
+
   static async createTeam(teamData: InsertTeam): Promise<TeamWithOwner> {
-    const response = await fetch(`${API_BASE}/teams`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(teamData),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create team');
-    }
-
-    const data = await response.json();
+    const { data } = await apiClient.post<{ team: TeamWithOwner }>('/teams', teamData);
     return data.team;
   }
 
   static async getTeamById(teamId: number): Promise<TeamWithOwner> {
-    const response = await fetch(`${API_BASE}/teams/${teamId}`, {
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch team');
-    }
-
-    const data = await response.json();
+    const { data } = await apiClient.get<{ team: TeamWithOwner }>(`/teams/${teamId}`);
     return data.team;
   }
 
   static async updateTeam(teamId: number, updates: Partial<InsertTeam>): Promise<TeamWithOwner> {
-    const response = await fetch(`${API_BASE}/teams/${teamId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(updates),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to update team');
-    }
-
-    const data = await response.json();
+    const { data } = await apiClient.put<{ team: TeamWithOwner }>(`/teams/${teamId}`, updates);
     return data.team;
+  }
+
+  static async deleteTeam(teamId: number): Promise<void> {
+    await apiClient.delete(`/teams/${teamId}`);
   }
 
   // Team Members
   static async getTeamMembers(teamId: number): Promise<TeamMemberWithUser[]> {
-    const response = await fetch(`${API_BASE}/teams/${teamId}/members`, {
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch team members');
-    }
-
-    const data = await response.json();
+    const { data } = await apiClient.get<{ members: TeamMemberWithUser[] }>(
+      `/teams/${teamId}/members`
+    );
     return data.members;
   }
 
@@ -91,22 +56,15 @@ class TeamAPI {
     teamId: number,
     memberData: { email: string; role: TeamRole; permissions: Permission[] }
   ): Promise<TeamMemberWithUser> {
-    const response = await fetch(`${API_BASE}/teams/${teamId}/members`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(memberData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to invite member');
+    try {
+      const { data } = await apiClient.post<{ member: TeamMemberWithUser }>(
+        `/teams/${teamId}/members`,
+        memberData
+      );
+      return data.member;
+    } catch (e: any) {
+      throw new Error(e.message || 'Failed to invite member');
     }
-
-    const data = await response.json();
-    return data.member;
   }
 
   static async updateMember(
@@ -114,32 +72,15 @@ class TeamAPI {
     userId: number,
     updates: { role: TeamRole; permissions: Permission[] }
   ): Promise<TeamMemberWithUser> {
-    const response = await fetch(`${API_BASE}/teams/${teamId}/members/${userId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(updates),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to update member');
-    }
-
-    const data = await response.json();
+    const { data } = await apiClient.put<{ member: TeamMemberWithUser }>(
+      `/teams/${teamId}/members/${userId}`,
+      updates
+    );
     return data.member;
   }
 
   static async removeMember(teamId: number, userId: number): Promise<void> {
-    const response = await fetch(`${API_BASE}/teams/${teamId}/members/${userId}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to remove member');
-    }
+    await apiClient.delete(`/teams/${teamId}/members/${userId}`);
   }
 
   // Permissions
@@ -148,18 +89,10 @@ class TeamAPI {
     userId: number,
     permission: Permission
   ): Promise<PermissionCheckResponse> {
-    const response = await fetch(
-      `${API_BASE}/teams/${teamId}/permissions/${userId}?permission=${permission}`,
-      {
-        credentials: 'include',
-      }
+    const { data } = await apiClient.get<PermissionCheckResponse>(
+      `/teams/${teamId}/permissions/${userId}?permission=${permission}`
     );
-
-    if (!response.ok) {
-      throw new Error('Failed to check permission');
-    }
-
-    return response.json();
+    return data;
   }
 
   static async getUserPermissions(

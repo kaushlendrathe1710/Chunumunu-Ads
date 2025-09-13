@@ -36,7 +36,7 @@ export const insertCampaignSchema = createInsertSchema(campaigns).pick({
 export const insertAdSchema = createInsertSchema(ads).pick({
   title: true,
   description: true,
-  category: true,
+  categories: true,
   tags: true,
   ctaLink: true,
   videoUrl: true,

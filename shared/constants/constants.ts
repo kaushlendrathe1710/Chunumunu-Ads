@@ -26,4 +26,9 @@ export const theme = {
   dark: 'dark',
   light: 'light',
   system: 'system',
-}
+} as const;
+
+export const limits = {
+  maxTeamsPerUser: 2,
+  maxMembersPerTeam: 5,
+} as const;

@@ -9,9 +9,11 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarSeparator,
 } from '@/components/ui/sidebar';
-import { Home, Tag, Users, Settings, PlayCircle, Wallet } from 'lucide-react';
+import { Home, Tag, Users, Settings, PlayCircle, Wallet, Building } from 'lucide-react';
 import { useTeam } from '@/hooks/useTeam';
+import { Separator } from '@radix-ui/react-select';
 
 export default function DashboardSidebar() {
   const { user } = useAuth();
@@ -43,7 +45,6 @@ export default function DashboardSidebar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={isActive('/wallet')}>
                 <Link href="/wallet" className="flex items-center">
@@ -52,23 +53,34 @@ export default function DashboardSidebar() {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
-
-            {/* Team Management Section - Only shown for team owners/admins */}
-            {currentTeam && hasTeamManagement && (
+            {/* Teams Management Section */}
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive('/manage-teams')}>
+                <Link href="/manage-teams" className="flex items-center">
+                  <Building className="mr-2 size-4" />
+                  <span>Manage Teams</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            {/* Current Team Section - Only shown when user has a current team */}
+            {/* Current Team Section - Only shown when user has a current team */}
+            {currentTeam && (
               <>
-                <hr className="my-2 border-gray-200" />
-                <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <SidebarSeparator />
+                <div className="truncate px-2 py-1 text-xs font-semibold tracking-wider text-gray-500">
                   Team: {currentTeam.name}
                 </div>
 
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive('/team/members')}>
-                    <Link href="/team/members" className="flex items-center">
-                      <Users className="mr-2 size-4" />
-                      <span>Team Members</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {hasTeamManagement && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive('/team/members')}>
+                      <Link href="/team/settings" className="flex items-center">
+                        <Users className="mr-2 size-4" />
+                        <span>Team Settings</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
 
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive('/team/campaigns')}>

@@ -1,21 +1,11 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
-import { PassThrough } from 'stream';
 import { createReadStream } from 'fs';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // Initialize S3 client with credentials from environment variables
 export const s3Client = new S3Client({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
-
-// Raw bucket configuration
-export const s3RawClient = new S3Client({
-  region: process.env.AWS_RAW_BUCKET_REGION,
+  region: process.env.AWS_BUCKET_REGION,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
@@ -23,10 +13,8 @@ export const s3RawClient = new S3Client({
 });
 
 // Use environment variable or fallback to hardcoded value
-const bucketName = process.env.AWS_S3_BUCKET_NAME || 'chunumunu';
-
-const rawBucketName = process.env.AWS_RAW_BUCKET_NAME;
-const rawBucketRegion = process.env.AWS_RAW_BUCKET_REGION;
+const bucketName = process.env.AWS_BUCKET_NAME;
+const bucketRegion = process.env.AWS_BUCKET_REGION;
 
 // Function to upload a video file to S3
 export async function uploadVideoToS3(filePath: string, fileName: string): Promise<string> {
@@ -100,7 +88,7 @@ export async function uploadVideoToS3(filePath: string, fileName: string): Promi
 
     // Return the URL of the uploaded file
     const videoUrl =
-      result.Location || `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      result.Location || `https://${bucketName}.s3.${bucketRegion}.amazonaws.com/${key}`;
     console.log(`Successfully uploaded to S3: ${videoUrl}`);
     return videoUrl;
   } catch (error) {
@@ -111,88 +99,9 @@ export async function uploadVideoToS3(filePath: string, fileName: string): Promi
   }
 }
 
-// Function to upload video data directly from request
-export async function uploadVideoStreamToS3(fileBuffer: Buffer, fileName: string): Promise<string> {
-  try {
-    // Validate inputs
-    if (!fileBuffer || fileBuffer.length === 0) throw new Error('File buffer is empty or missing');
-    if (!fileName) throw new Error('File name is required');
-
-    // Clean the filename to prevent S3 path issues
-    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-
-    // Create a PassThrough stream from the buffer
-    const stream = new PassThrough();
-    stream.end(fileBuffer);
-
-    // Add error event handler to the stream
-    stream.on('error', (error) => {
-      console.error('Error in buffer stream:', error);
-      throw new Error(`Stream error: ${error.message}`);
-    });
-
-    // Create a unique file key (path in S3) with UUID for collision prevention
-    const timestamp = Date.now();
-    const uuid = Math.random().toString(36).substring(2, 15);
-    const key = `videos/${timestamp}-${uuid}-${sanitizedFileName}`;
-
-    // Detect content type based on file extension
-    let contentType = 'video/mp4'; // Default
-    if (fileName.endsWith('.webm')) contentType = 'video/webm';
-    else if (fileName.endsWith('.mov')) contentType = 'video/quicktime';
-    else if (fileName.endsWith('.avi')) contentType = 'video/x-msvideo';
-    else if (fileName.endsWith('.mkv')) contentType = 'video/x-matroska';
-
-    // Configure the upload parameters
-    const uploadParams = {
-      Bucket: bucketName,
-      Key: key,
-      Body: stream,
-      ContentType: contentType,
-      // Add additional metadata for better organization and searchability
-      Metadata: {
-        'original-filename': sanitizedFileName,
-        'upload-timestamp': timestamp.toString(),
-        'upload-method': 'stream',
-      },
-    };
-
-    // Create a multipart upload with retry configuration
-    const upload = new Upload({
-      client: s3Client,
-      params: uploadParams,
-      // Add retry options for production reliability
-      queueSize: 4, // Number of concurrent parts to upload
-      partSize: 5 * 1024 * 1024, // 5MB part size
-      leavePartsOnError: false, // Clean up partial uploads on failure
-    });
-
-    // Add event listeners for better monitoring and debugging
-    upload.on('httpUploadProgress', (progress) => {
-      console.log(`Stream upload progress: ${progress.loaded}/${progress.total} bytes`);
-    });
-
-    // Execute the upload and get the result
-    const result = await upload.done();
-
-    // Return the URL of the uploaded file
-    const videoUrl =
-      result.Location || `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-    console.log(`Successfully uploaded stream to S3: ${videoUrl}`);
-    return videoUrl;
-  } catch (error) {
-    console.error('Error uploading stream to S3:', error);
-    throw new Error(
-      `Failed to upload video stream to S3: ${
-        error instanceof Error ? error.message : 'Unknown error'
-      }`
-    );
-  }
-}
-
 // Function to get a signed URL for a video in S3
 export function getS3VideoUrl(key: string): string {
-  return `https://${rawBucketName}.s3.${rawBucketRegion}.amazonaws.com/${key}`;
+  return `https://${bucketName}.s3.${bucketRegion}.amazonaws.com/${key}`;
 }
 
 // Generate a presigned URL with a limited time to allow temporary access
@@ -200,7 +109,7 @@ export function getS3VideoUrl(key: string): string {
 export async function getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
   try {
     // Return the standard S3 URL
-    return `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    return `https://${bucketName}.s3.${bucketRegion}.amazonaws.com/${key}`;
   } catch (error) {
     console.error('Error generating presigned URL:', error);
     throw new Error('Failed to generate presigned URL');
@@ -234,7 +143,7 @@ export async function generatePresignedUrlForUpload(
 
     // Create the PUT command
     const command = new PutObjectCommand({
-      Bucket: rawBucketName,
+      Bucket: bucketName,
       Key: key,
       ContentType: contentType,
       // Add additional metadata for better organization and searchability
@@ -247,7 +156,7 @@ export async function generatePresignedUrlForUpload(
     });
 
     // Generate the presigned URL
-    const signedUrl = await getSignedUrl(s3RawClient, command, { expiresIn });
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn });
 
     // Return both the URL and the file key (needed to construct the final URL after upload)
     return {
@@ -335,7 +244,7 @@ export async function uploadImageToS3(filePath: string, fileName: string): Promi
 
     // Return the URL of the uploaded file
     const imageUrl =
-      result.Location || `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      result.Location || `https://${bucketName}.s3.${bucketRegion}.amazonaws.com/${key}`;
     console.log(`Successfully uploaded image to S3: ${imageUrl}`);
     return imageUrl;
   } catch (error) {
@@ -343,6 +252,55 @@ export async function uploadImageToS3(filePath: string, fileName: string): Promi
     throw new Error(
       `Failed to upload image to S3: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
+  }
+}
+
+// Dedicated avatar uploader for predictable key structure: <userId>/profile/<filename>
+export async function uploadAvatarToS3(
+  filePath: string,
+  fileName: string,
+  userId: number
+): Promise<string> {
+  try {
+    if (!filePath) throw new Error('File path is required');
+    if (!fileName) throw new Error('File name is required');
+    if (!userId) throw new Error('User ID required for avatar path');
+
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const key = `${userId}/profile/${sanitizedFileName}`; // stable path (overwrites old avatar version implicitly)
+
+    let contentType = 'image/jpeg';
+    if (fileName.endsWith('.png')) contentType = 'image/png';
+    else if (fileName.endsWith('.gif')) contentType = 'image/gif';
+    else if (fileName.endsWith('.webp')) contentType = 'image/webp';
+    else if (fileName.endsWith('.svg')) contentType = 'image/svg+xml';
+
+    const fileStream = createReadStream(filePath);
+    fileStream.on('error', (err) => {
+      throw new Error(`Avatar stream error: ${err.message}`);
+    });
+
+    const upload = new Upload({
+      client: s3Client,
+      params: {
+        Bucket: bucketName,
+        Key: key,
+        Body: fileStream,
+        ContentType: contentType,
+        Metadata: {
+          'original-name': sanitizedFileName,
+          'upload-timestamp': Date.now().toString(),
+          purpose: 'avatar',
+          userId: userId.toString(),
+        },
+      },
+    });
+
+    const result = await upload.done();
+    return result.Location || `https://${bucketName}.s3.${bucketRegion}.amazonaws.com/${key}`;
+  } catch (e) {
+    console.error('Avatar upload failed:', e);
+    throw new Error('Failed to upload avatar');
   }
 }
 

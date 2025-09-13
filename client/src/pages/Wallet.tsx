@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,135 +20,99 @@ import {
 } from '@/components/ui/select';
 import { Plus, Wallet, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { QK } from '@/api/queryKeys';
+import {
+  fetchWallet as fetchWalletApi,
+  fetchWalletTransactions,
+  addFunds as addFundsApi,
+  AddFundsPayload,
+  WalletDto,
+  TransactionDto,
+  TransactionsPage,
+} from '@/api/walletApi';
+import { SmartPagination } from '@/components/ui/SmartPagination';
 
-interface Wallet {
-  id: number;
-  balance: string;
-  currency: string;
-  isActive: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Transaction {
-  id: number;
-  type: 'credit' | 'debit';
-  amount: string;
-  description?: string;
-  status: string;
-  paymentMethod?: string;
-  campaignId?: number;
-  adId?: number;
-  createdAt: string;
-}
-
-interface AddFundsData {
-  amount: number;
-  description: string;
-  paymentMethod: string;
-}
+// Types now imported from walletApi
+interface AddFundsData extends AddFundsPayload {}
 
 export default function WalletPage() {
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [addFundsModalOpen, setAddFundsModalOpen] = useState(false);
+  const queryClient = useQueryClient();
   const [formData, setFormData] = useState<AddFundsData>({
     amount: 0,
     description: '',
     paymentMethod: 'stripe',
   });
+  const [addFundsModalOpen, setAddFundsModalOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
-  useEffect(() => {
-    fetchWallet();
-    fetchTransactions();
-  }, []);
-
-  const fetchWallet = async () => {
-    try {
-      const response = await fetch('/api/wallet', {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setWallet(data.wallet);
-      } else {
-        console.error('Failed to fetch wallet:', response.status);
-        toast.error('Failed to load wallet');
+  const { data: wallet, isLoading: walletLoading } = useQuery<WalletDto | null>({
+    queryKey: QK.wallet(),
+    placeholderData: (prev) => prev, // keep previous balance during refetch
+    queryFn: async () => {
+      try {
+        return await fetchWalletApi();
+      } catch (e: any) {
+        toast.error(e.message || 'Failed to load wallet');
+        return null;
       }
-    } catch (error) {
-      console.error('Failed to fetch wallet:', error);
-      toast.error('Failed to load wallet');
-    }
-  };
+    },
+  });
 
-  const fetchTransactions = async () => {
-    try {
-      const response = await fetch('/api/wallet/transactions', {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTransactions(data.transactions || []);
-      } else {
-        console.error('Failed to fetch transactions:', response.status);
-        toast.error('Failed to load transactions');
+  const { data: txPage, isLoading: txLoading } = useQuery<TransactionsPage>({
+    queryKey: QK.walletTx(page, pageSize),
+    queryFn: async () => {
+      try {
+        return await fetchWalletTransactions(page, pageSize);
+      } catch (e: any) {
+        toast.error(e.message || 'Failed to load transactions');
+        return {
+          transactions: [],
+          pagination: { page, limit: pageSize, total: 0, totalPages: 1, hasMore: false },
+        };
       }
-    } catch (error) {
-      console.error('Failed to fetch transactions:', error);
-      toast.error('Failed to load transactions');
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    placeholderData: (prev) => prev, // preserve previous page data while loading
+  });
+  const transactions: TransactionDto[] = txPage?.transactions || [];
+  const pagination = txPage?.pagination;
 
+  const addFundsMutation = useMutation({
+    mutationFn: (payload: AddFundsPayload) => addFundsApi(payload),
+    onSuccess: async () => {
+      toast.success('Funds added successfully');
+      setAddFundsModalOpen(false);
+      setFormData({ amount: 0, description: '', paymentMethod: 'stripe' });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: QK.wallet() }),
+        queryClient.invalidateQueries({ queryKey: QK.walletTx(page, pageSize) }),
+      ]);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to add funds');
+    },
+  });
   const handleAddFunds = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (formData.amount <= 0) {
       toast.error('Amount must be greater than 0');
       return;
     }
-
-    try {
-      const response = await fetch('/api/wallet/add-funds', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        toast.success('Funds added successfully');
-        setAddFundsModalOpen(false);
-        setFormData({ amount: 0, description: '', paymentMethod: 'stripe' });
-        // Refresh wallet and transactions
-        await fetchWallet();
-        await fetchTransactions();
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to add funds');
-      }
-    } catch (error) {
-      console.error('Add funds error:', error);
-      toast.error('Failed to add funds');
-    }
+    addFundsMutation.mutate({
+      amount: formData.amount,
+      description: formData.description,
+      paymentMethod: formData.paymentMethod,
+    });
   };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -167,6 +131,7 @@ export default function WalletPage() {
     }
   };
 
+  const loading = walletLoading || txLoading;
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -210,8 +175,8 @@ export default function WalletPage() {
             <div className="text-2xl font-bold">
               $
               {transactions
-                .filter((t) => t.type === 'debit' && t.status === 'completed')
-                .reduce((sum, t) => sum + parseFloat(t.amount), 0)
+                .filter((t: TransactionDto) => t.type === 'debit' && t.status === 'completed')
+                .reduce((sum: number, t: TransactionDto) => sum + parseFloat(t.amount), 0)
                 .toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground">Total campaign and ad spending</p>
@@ -227,8 +192,8 @@ export default function WalletPage() {
             <div className="text-2xl font-bold">
               $
               {transactions
-                .filter((t) => t.type === 'credit' && t.status === 'completed')
-                .reduce((sum, t) => sum + parseFloat(t.amount), 0)
+                .filter((t: TransactionDto) => t.type === 'credit' && t.status === 'completed')
+                .reduce((sum: number, t: TransactionDto) => sum + parseFloat(t.amount), 0)
                 .toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground">Total funds added</p>
@@ -320,7 +285,9 @@ export default function WalletPage() {
                     >
                       Cancel
                     </Button>
-                    <Button type="submit">Add Funds</Button>
+                    <Button type="submit" disabled={addFundsMutation.isPending}>
+                      {addFundsMutation.isPending ? 'Adding...' : 'Add Funds'}
+                    </Button>
                   </div>
                 </form>
               </DialogContent>
@@ -340,7 +307,7 @@ export default function WalletPage() {
             <div className="py-8 text-center text-muted-foreground">No transactions yet</div>
           ) : (
             <div className="space-y-4">
-              {transactions.map((transaction) => (
+              {transactions.map((transaction: TransactionDto) => (
                 <div
                   key={transaction.id}
                   className="flex items-center justify-between rounded-lg border p-4"
@@ -383,6 +350,15 @@ export default function WalletPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+          {pagination && (
+            <div className="mt-6 flex justify-center">
+              <SmartPagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                onChange={(p) => setPage(p)}
+              />
             </div>
           )}
         </CardContent>

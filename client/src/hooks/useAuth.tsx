@@ -10,11 +10,13 @@ import {
 } from '@/store/slices/authSlice';
 import { useLocation } from 'wouter';
 import { toast } from 'react-toastify';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const useAuth = () => {
   const dispatch = useAppDispatch();
   const { user, isAuthenticated, loading, error } = useAppSelector((state) => state.auth);
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
 
   // Fetch user on mount if we have a token but no user
   useEffect(() => {
@@ -60,10 +62,13 @@ export const useAuth = () => {
   const logout = async () => {
     try {
       await dispatch(logoutAction()).unwrap();
+      // Clear React Query cache on logout to avoid stale data for next user
+      queryClient.clear();
       setLocation('/');
       toast.success("You've been successfully logged out");
     } catch (error: any) {
       // Even if logout fails, we still navigate away
+      queryClient.clear();
       setLocation('/');
       toast.error(error || 'Failed to logout');
     }
@@ -79,6 +84,8 @@ export const useAuth = () => {
     }
   };
 
+  const refresh = () => dispatch(fetchMe());
+
   return {
     user,
     isAuthenticated,
@@ -88,7 +95,8 @@ export const useAuth = () => {
     verifyOtp,
     logout,
     updateUser,
-    logoutMutation: { mutate: logout, isPending: loading }, // For backward compatibility
+    refresh,
+    logoutMutation: { mutate: logout, isPending: loading },
   };
 };
 

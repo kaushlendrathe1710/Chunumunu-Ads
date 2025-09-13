@@ -21,6 +21,12 @@ import {
 import { Plus, MoreVertical, Play, Pause, Eye, Wallet, AlertCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { DatePicker } from '@/components/common/DatePicker';
+import CampaignAPI, { CreateCampaignPayload } from '@/api/campaignApi';
+import { fetchWallet } from '@/api/walletApi';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { QK } from '@/api/queryKeys';
+import { campaignSchema } from '@/utils/schemas';
+import { z } from 'zod';
 
 interface Campaign {
   id: string;
@@ -52,7 +58,6 @@ export default function TeamCampaigns() {
   const { currentTeam, userRole, hasPermission } = useTeam();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [walletBalance, setWalletBalance] = useState<WalletBalance | null>(null);
-  const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [formData, setFormData] = useState<CreateCampaignData>({
     name: '',
@@ -62,58 +67,68 @@ export default function TeamCampaigns() {
     endDate: undefined,
   });
 
+  const queryClient = useQueryClient();
+  const campaignsQuery = useQuery<Campaign[]>({
+    queryKey: currentTeam ? QK.campaigns(currentTeam.id) : ['campaigns', 'noop'],
+    queryFn: async () => {
+      if (!currentTeam) return [];
+      const list = await CampaignAPI.list(currentTeam.id);
+      return list.map((c: any) => ({
+        id: c.id.toString(),
+        name: c.name,
+        description: c.description,
+        status: c.status,
+        budget: parseFloat(c.budget || '0'),
+        spent: parseFloat(c.spent || '0'),
+        impressions: c.impressions || 0,
+        clicks: c.clicks || 0,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      }));
+    },
+    enabled: !!currentTeam,
+    placeholderData: (prev) => prev, // SWR: show old data while fetching
+  });
+
+  // Sync local campaigns state for potential future optimistic edits
   useEffect(() => {
-    if (currentTeam) {
-      fetchCampaigns();
-      fetchWalletBalance();
+    if (campaignsQuery.data && campaignsQuery.data !== campaigns) {
+      setCampaigns(campaignsQuery.data);
     }
-  }, [currentTeam]);
+  }, [campaignsQuery.data, campaigns]);
 
-  const fetchCampaigns = async () => {
-    if (!currentTeam) return;
-
-    try {
-      const response = await fetch(`/api/teams/${currentTeam.id}/campaigns`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCampaigns(data.campaigns || []);
-      } else {
-        console.error('Failed to fetch campaigns:', response.status);
-        setCampaigns([]);
+  useQuery({
+    queryKey: currentTeam ? ['wallet', 'balance'] : ['wallet', 'noop'],
+    queryFn: async () => {
+      if (!currentTeam) return null;
+      try {
+        const wallet = await fetchWallet();
+        const wb = { balance: wallet.balance, currency: wallet.currency };
+        setWalletBalance(wb);
+        return wb;
+      } catch (e) {
+        console.error('Failed to fetch wallet balance:', e);
+        return null;
       }
-    } catch (error) {
-      console.error('Failed to fetch campaigns:', error);
-      toast.error('Failed to load campaigns');
-      setCampaigns([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchWalletBalance = async () => {
-    try {
-      const response = await fetch('/api/wallet/balance', {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setWalletBalance(data);
-      } else {
-        console.error('Failed to fetch wallet balance:', response.status);
-      }
-    } catch (error) {
-      console.error('Failed to fetch wallet balance:', error);
-    }
-  };
+    },
+    enabled: !!currentTeam,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  });
 
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentTeam || !formData.startDate || !formData.endDate) {
-      toast.error('Please fill in all required fields including dates');
+    if (!currentTeam) return;
+
+    // Validate via zod
+    const parseResult = campaignSchema.safeParse(formData);
+    if (!parseResult.success) {
+      const first = parseResult.error.errors[0];
+      toast.error(first.message);
+      return;
+    }
+    if (!formData.startDate || !formData.endDate) {
+      toast.error('Start and end date required');
       return;
     }
 
@@ -129,40 +144,29 @@ export default function TeamCampaigns() {
     }
 
     try {
-      const campaignData = {
-        ...formData,
+      const payload: CreateCampaignPayload = {
+        name: formData.name.trim(),
+        description: formData.description?.trim() || '',
+        budget: formData.budget,
         startDate: formData.startDate.toISOString(),
         endDate: formData.endDate.toISOString(),
+        status: 'draft',
       };
-
-      const response = await fetch(`/api/teams/${currentTeam.id}/campaigns`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(campaignData),
+      await CampaignAPI.create(currentTeam.id, payload);
+      toast.success('Campaign created successfully');
+      setCreateModalOpen(false);
+      setFormData({
+        name: '',
+        description: '',
+        budget: 0,
+        startDate: undefined,
+        endDate: undefined,
       });
-
-      if (response.ok) {
-        toast.success('Campaign created successfully');
-        setCreateModalOpen(false);
-        setFormData({
-          name: '',
-          description: '',
-          budget: 0,
-          startDate: undefined,
-          endDate: undefined,
-        });
-        fetchCampaigns();
-        fetchWalletBalance(); // Refresh wallet balance
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to create campaign');
-      }
+      queryClient.invalidateQueries({ queryKey: QK.campaigns(currentTeam.id) });
+      queryClient.invalidateQueries({ queryKey: QK.wallet() });
     } catch (error) {
       console.error('Failed to create campaign:', error);
-      toast.error('Failed to create campaign');
+      toast.error(error instanceof Error ? error.message : 'Failed to create campaign');
     }
   };
 
@@ -170,25 +174,12 @@ export default function TeamCampaigns() {
     if (!currentTeam) return;
 
     try {
-      const response = await fetch(`/api/teams/${currentTeam.id}/campaigns/${campaignId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (response.ok) {
-        toast.success('Campaign status updated');
-        fetchCampaigns();
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to update campaign');
-      }
-    } catch (error) {
-      console.error('Failed to update campaign:', error);
-      toast.error('Failed to update campaign');
+      await CampaignAPI.update(currentTeam.id, campaignId, { status: newStatus as any });
+      toast.success('Campaign status updated');
+      queryClient.invalidateQueries({ queryKey: QK.campaigns(currentTeam.id) });
+    } catch (e: any) {
+      console.error('Failed to update campaign:', e);
+      toast.error(e.message || 'Failed to update campaign');
     }
   };
 
@@ -356,7 +347,7 @@ export default function TeamCampaigns() {
 
       {/* Campaigns List */}
       <div className="grid gap-6">
-        {loading ? (
+        {campaignsQuery.isLoading && campaigns.length === 0 ? (
           <Card>
             <CardContent className="pt-6 text-center">
               <p className="text-gray-500">Loading campaigns...</p>
