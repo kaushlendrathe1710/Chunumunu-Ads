@@ -1,4 +1,6 @@
 export * from '@shared/types/index';
+import { Request } from 'express';
+import { Permission, TeamRole } from '@shared/types';
 
 // Server-specific types can be added here
 export interface AuthenticatedRequest extends Request {
@@ -10,6 +12,8 @@ export interface AuthenticatedRequest extends Request {
     isAdmin?: boolean;
     isVerified?: boolean;
   };
+  userPermissions?: Permission[];
+  userRole?: TeamRole;
 }
 
 // Session types

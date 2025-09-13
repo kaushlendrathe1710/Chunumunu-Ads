@@ -1,7 +1,8 @@
 import { db } from '@server/db/connect';
 import { eq, and, sql, gte } from 'drizzle-orm';
 import { User, InsertUser } from '@shared/types/index';
-import { users } from '@server/db/schema';
+import { users, teams, teamMembers } from '@server/db/schema';
+import { teamRole } from '@shared/constants';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';
 
@@ -31,8 +32,32 @@ export async function getUserByUsername(username: string): Promise<User | undefi
 }
 
 export async function createUser(insertUser: InsertUser): Promise<User> {
-  const result = await db.insert(users).values(insertUser).returning();
-  return result[0];
+  const result = await db.transaction(async (tx) => {
+    // Create the user
+    const [newUser] = await tx.insert(users).values(insertUser).returning();
+
+    // Create default team for the user
+    const [defaultTeam] = await tx
+      .insert(teams)
+      .values({
+        name: `${newUser.username}'s Team`,
+        description: `Default team for ${newUser.username}`,
+        ownerId: newUser.id,
+      })
+      .returning();
+
+    // Add user as team owner
+    await tx.insert(teamMembers).values({
+      teamId: defaultTeam.id,
+      userId: newUser.id,
+      role: teamRole.owner,
+      permissions: [], // Empty permissions for owner - they have all permissions by default
+    });
+
+    return newUser;
+  });
+
+  return result;
 }
 
 export async function updateUser(

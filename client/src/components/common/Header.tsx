@@ -1,9 +1,10 @@
 import logo from '@client/public/logo.svg';
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useTeam } from '@/hooks/useTeam';
 import { cn } from '@/lib/utils';
-import { Upload, Menu } from 'lucide-react';
+import { Upload, Menu, Plus, Users, ChevronDown, Settings } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -13,26 +14,17 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
+import { CreateTeamModal, TeamSelector } from '@/components/teams';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
-  const [location, navigate] = useLocation();
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return false;
-  });
+  const { currentTeam, hasPermission, loading } = useTeam();
 
-  const toggleDarkMode = () => {
-    const newIsDarkMode = !isDarkMode;
-    setIsDarkMode(newIsDarkMode);
-    if (typeof window !== 'undefined') {
-      document.documentElement.classList.toggle('dark', newIsDarkMode);
-      localStorage.setItem('darkMode', newIsDarkMode.toString());
-    }
-  };
+  const [location, navigate] = useLocation();
 
   const handleLogout = async () => {
     await logout();
@@ -42,12 +34,18 @@ export default function Header() {
   return (
     <header className="z-20 border-b border-border bg-background">
       <div className="flex h-14 items-center justify-between px-4">
-        {/* Left section - Sidebar trigger & avatar */}
+        {/* Left section - Sidebar trigger & team selector */}
         <div className="flex items-center gap-3">
           <SidebarTrigger />
+
+          {/* Team Selector */}
+          {isAuthenticated && <TeamSelector />}
         </div>
+
         {/* Right section - User info & actions */}
         <div className="flex items-center gap-3">
+          <ThemeToggle />
+
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -69,11 +67,41 @@ export default function Header() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col">
-                    <span className="font-medium">{user?.username}</span>
-                    <span className="text-xs text-muted-foreground">{user?.email}</span>
+                    <span className="max-w-[10ch] truncate font-medium">{user?.username}</span>
+                    <span className="max-w-[20ch] truncate text-xs text-muted-foreground">
+                      {user?.email}
+                    </span>
                   </div>
                 </div>
                 <DropdownMenuSeparator />
+
+                {/* Team Management */}
+                {currentTeam && hasPermission('manage_team') && (
+                  <>
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Team Management</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => navigate('/manage-teams')}
+                        className="cursor-pointer"
+                      >
+                        <Users className="mr-2 h-4 w-4" />
+                        Manage Members
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => navigate('/team/settings')}
+                        className="cursor-pointer"
+                      >
+                        <Settings className="mr-2 h-4 w-4" />
+                        Team Settings
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+
+                <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
+                  <i className="ri-user-settings-line mr-2" /> Profile
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
                   <i className="ri-logout-box-line mr-2"></i> Sign out
                 </DropdownMenuItem>

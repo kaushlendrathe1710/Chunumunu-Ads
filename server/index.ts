@@ -29,7 +29,7 @@ const app = createApp();
     // ALWAYS serve the app on port 5000
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
-    const port = process.env.PORT || 5000;
+    const port = process.env.PORT;
     server.listen(port, () => {
       log(`Server running at: port ${port}`);
     });

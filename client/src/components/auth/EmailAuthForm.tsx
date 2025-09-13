@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'react-toastify';
 import { useLocation } from 'wouter';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 
 export default function EmailAuthForm() {
   const [email, setEmail] = useState('');
@@ -37,9 +38,8 @@ export default function EmailAuthForm() {
     <form onSubmit={handleEmailSubmit} className="space-y-4">
       <div>
         <label className="mb-1 block text-sm font-medium">Email</label>
-        <input
+        <Input
           type="email"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#3EA6FF] dark:border-gray-700 dark:bg-gray-900"
           placeholder="Enter your email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -49,7 +49,7 @@ export default function EmailAuthForm() {
       </div>
       <Button
         type="submit"
-        className="w-full rounded-lg bg-[#3EA6FF] py-2 font-medium text-white disabled:opacity-50"
+        className='w-full'
         disabled={isLoading || !email}
       >
         {isLoading ? 'Sending...' : 'Continue'}
