@@ -9,6 +9,8 @@ import {
 } from '@shared/types';
 import { AuthenticatedRequest } from '@server/types';
 import { z } from 'zod';
+import { uploadAvatarToS3, deleteFileFromS3 } from '../config/s3';
+import fs from 'fs';
 
 export class TeamController {
   static async createTeam(req: AuthenticatedRequest, res: Response) {
@@ -19,10 +21,106 @@ export class TeamController {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const validatedData = insertTeamSchema.parse(req.body);
+      // Handle FormData vs regular JSON payload differently
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      let validatedData: any;
+
+      if (files?.avatar && files.avatar[0]) {
+        // When files are present, validate manually since FormData parsing may not work with Zod
+        const { name, description } = req.body;
+
+        if (!name || typeof name !== 'string' || name.trim().length === 0) {
+          return res.status(400).json({
+            error: 'Invalid data',
+            details: [
+              {
+                code: 'invalid_type',
+                expected: 'string',
+                received: typeof name,
+                path: ['name'],
+                message: 'Team name is required',
+              },
+            ],
+          });
+        }
+
+        if (name.length > 100) {
+          return res.status(400).json({
+            error: 'Invalid data',
+            details: [
+              {
+                code: 'too_big',
+                maximum: 100,
+                type: 'string',
+                path: ['name'],
+                message: 'Team name must be 100 characters or less',
+              },
+            ],
+          });
+        }
+
+        if (description && typeof description === 'string' && description.length > 500) {
+          return res.status(400).json({
+            error: 'Invalid data',
+            details: [
+              {
+                code: 'too_big',
+                maximum: 500,
+                type: 'string',
+                path: ['description'],
+                message: 'Description must be 500 characters or less',
+              },
+            ],
+          });
+        }
+
+        validatedData = {
+          name: name.trim(),
+          description: description ? description.trim() : undefined,
+        };
+      } else {
+        // Regular JSON payload validation
+        validatedData = insertTeamSchema.parse(req.body);
+      }
+
+      // Handle avatar upload if provided
+      let avatarUrl = undefined;
+      if (files?.avatar && files.avatar[0]) {
+        const { filename, path: filePath, originalname, mimetype } = files.avatar[0];
+
+        if (!mimetype.startsWith('image/')) {
+          fs.unlinkSync(filePath); // Clean up the file if not an image
+          return res.status(400).json({
+            error: 'Avatar must be an image file',
+          });
+        }
+
+        try {
+          // Upload team avatar with a unique identifier
+          avatarUrl = await uploadAvatarToS3(filePath, originalname, userId, 'team');
+          console.log(`Team avatar uploaded successfully by user ${userId}: ${originalname}`);
+        } catch (uploadError) {
+          console.error('Error uploading team avatar to S3:', uploadError);
+          return res.status(500).json({
+            error: 'Failed to upload team avatar',
+          });
+        } finally {
+          // Clean up local file
+          try {
+            fs.unlinkSync(filePath);
+          } catch (err) {
+            console.warn('Failed to clean up local team avatar file:', err);
+          }
+        }
+      }
+
+      const teamDataWithAvatar = {
+        ...validatedData,
+        ...(avatarUrl && { avatar: avatarUrl }),
+      };
 
       try {
-        const team = await TeamService.createTeam(validatedData, userId);
+        const team = await TeamService.createTeam(teamDataWithAvatar, userId);
 
         // Return team with user role and permissions (owner has all permissions)
         const teamWithUserRole = {
@@ -49,6 +147,18 @@ export class TeamController {
 
         res.status(201).json({ team: teamWithUserRole });
       } catch (teamError: any) {
+        // If team creation fails and we uploaded an avatar, clean it up
+        if (avatarUrl) {
+          try {
+            await deleteFileFromS3(avatarUrl);
+          } catch (deleteError) {
+            console.warn(
+              'Failed to clean up uploaded team avatar after team creation error:',
+              deleteError
+            );
+          }
+        }
+
         if (teamError.message.includes('Maximum team limit reached')) {
           return res.status(400).json({
             error: teamError.message,
@@ -275,6 +385,38 @@ export class TeamController {
     }
   }
 
+  static async leaveTeam(req: AuthenticatedRequest, res: Response) {
+    try {
+      const teamId = parseInt(req.params.teamId);
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Check if user is a member of the team
+      const membership = await TeamService.getUserTeamMembership(teamId, userId);
+      if (!membership) {
+        return res.status(404).json({ error: 'You are not a member of this team' });
+      }
+
+      // Cannot leave if user is the team owner
+      if (membership.role === 'owner') {
+        return res.status(400).json({
+          error: 'Team owners cannot leave the team. Delete the team instead.',
+        });
+      }
+
+      await TeamService.removeTeamMember(teamId, userId);
+      res.status(204).json({
+        message: 'You have left the team successfully',
+      });
+    } catch (error) {
+      console.error('Error leaving team:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
   static async checkPermission(req: AuthenticatedRequest, res: Response) {
     try {
       const teamId = parseInt(req.params.teamId);
@@ -315,8 +457,123 @@ export class TeamController {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
 
-      const validatedData = updateTeamSchema.parse(req.body);
-      const updatedTeam = await TeamService.updateTeam(teamId, validatedData);
+      // Handle FormData vs regular JSON payload differently
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      let validatedData: any;
+
+      if (files?.avatar && files.avatar[0]) {
+        // When files are present, validate manually since FormData parsing may not work with Zod
+        const { name, description } = req.body;
+
+        if (!name || typeof name !== 'string' || name.trim().length === 0) {
+          return res.status(400).json({
+            error: 'Invalid data',
+            details: [
+              {
+                code: 'invalid_type',
+                expected: 'string',
+                received: typeof name,
+                path: ['name'],
+                message: 'Team name is required',
+              },
+            ],
+          });
+        }
+
+        if (name.length > 100) {
+          return res.status(400).json({
+            error: 'Invalid data',
+            details: [
+              {
+                code: 'too_big',
+                maximum: 100,
+                type: 'string',
+                path: ['name'],
+                message: 'Team name must be 100 characters or less',
+              },
+            ],
+          });
+        }
+
+        if (description && typeof description === 'string' && description.length > 500) {
+          return res.status(400).json({
+            error: 'Invalid data',
+            details: [
+              {
+                code: 'too_big',
+                maximum: 500,
+                type: 'string',
+                path: ['description'],
+                message: 'Description must be 500 characters or less',
+              },
+            ],
+          });
+        }
+
+        validatedData = {
+          name: name.trim(),
+          description: description ? description.trim() : undefined,
+        };
+      } else {
+        // Regular JSON payload validation
+        validatedData = updateTeamSchema.parse(req.body);
+      }
+
+      // Get current team data for potential cleanup
+      const currentTeam = await TeamService.getTeamById(teamId);
+      if (!currentTeam) {
+        return res.status(404).json({ error: 'Team not found' });
+      }
+
+      const updates: any = { ...validatedData };
+
+      // Handle avatar upload if provided
+      if (files?.avatar && files.avatar[0]) {
+        const { filename, path: filePath, originalname, mimetype } = files.avatar[0];
+
+        if (!mimetype.startsWith('image/')) {
+          fs.unlinkSync(filePath); // Clean up the file if not an image
+          return res.status(400).json({
+            error: 'Avatar must be an image file',
+          });
+        }
+
+        try {
+          // Upload team avatar with team ID as identifier
+          const newAvatarUrl = await uploadAvatarToS3(filePath, originalname, teamId, 'team');
+          console.log(`Team avatar updated successfully for team ${teamId}: ${originalname}`);
+
+          // Delete old avatar if it exists and is from S3
+          if (
+            currentTeam.avatar &&
+            currentTeam.avatar !== newAvatarUrl &&
+            currentTeam.avatar.includes('.amazonaws.com/')
+          ) {
+            try {
+              await deleteFileFromS3(currentTeam.avatar);
+              console.log(`Old team avatar deleted from S3: ${currentTeam.avatar}`);
+            } catch (deleteError) {
+              console.warn('Failed to delete old team avatar from S3:', deleteError);
+            }
+          }
+
+          updates.avatar = newAvatarUrl;
+        } catch (uploadError) {
+          console.error('Error uploading team avatar to S3:', uploadError);
+          return res.status(500).json({
+            error: 'Failed to upload team avatar',
+          });
+        } finally {
+          // Clean up local file
+          try {
+            fs.unlinkSync(filePath);
+          } catch (err) {
+            console.warn('Failed to clean up local team avatar file:', err);
+          }
+        }
+      }
+
+      const updatedTeam = await TeamService.updateTeam(teamId, updates);
 
       res.json({ team: updatedTeam });
     } catch (error) {

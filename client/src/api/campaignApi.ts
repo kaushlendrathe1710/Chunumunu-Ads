@@ -9,8 +9,20 @@ export interface CampaignDto {
   spent?: string | null;
   impressions?: number;
   clicks?: number;
+  startDate?: string;
+  endDate?: string;
   createdAt: string;
   updatedAt: string;
+  creator?: {
+    id: number;
+    username: string;
+    email: string;
+    avatar?: string | null;
+  };
+  team?: {
+    id: number;
+    name: string;
+  };
 }
 
 export interface CreateCampaignPayload {
@@ -23,6 +35,18 @@ export interface CreateCampaignPayload {
 }
 
 export interface UpdateCampaignPayload extends Partial<CreateCampaignPayload> {}
+
+export interface TeamWalletBalance {
+  balance: string;
+  currency: string;
+  teamId: number;
+  teamName: string;
+}
+
+export interface DeleteCampaignResponse {
+  message: string;
+  refundAmount: number;
+}
 
 class CampaignAPI {
   static async list(teamId: number): Promise<CampaignDto[]> {
@@ -42,10 +66,25 @@ class CampaignAPI {
     campaignId: number | string,
     payload: UpdateCampaignPayload
   ): Promise<CampaignDto> {
-    const { data } = await apiClient.patch<CampaignDto>(
+    const { data } = await apiClient.put<CampaignDto>(
       `/teams/${teamId}/campaigns/${campaignId}`,
       payload
     );
+    return data;
+  }
+
+  static async delete(
+    teamId: number,
+    campaignId: number | string
+  ): Promise<DeleteCampaignResponse> {
+    const { data } = await apiClient.delete<DeleteCampaignResponse>(
+      `/teams/${teamId}/campaigns/${campaignId}`
+    );
+    return data;
+  }
+
+  static async getTeamWalletBalance(teamId: number): Promise<TeamWalletBalance> {
+    const { data } = await apiClient.get<TeamWalletBalance>(`/teams/${teamId}/wallet-balance`);
     return data;
   }
 }

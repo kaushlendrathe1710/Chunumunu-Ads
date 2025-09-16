@@ -12,6 +12,14 @@ router.post('/teams/:teamId/campaigns', checkTeamPermissions, CampaignController
 
 router.get('/teams/:teamId/campaigns', checkTeamPermissions, CampaignController.getCampaigns);
 
+// Team wallet balance endpoint
+// Get team owner's wallet balance for campaign creation
+router.get(
+  '/teams/:teamId/wallet-balance',
+  checkTeamPermissions,
+  CampaignController.getTeamWalletBalance
+);
+
 router.get(
   '/teams/:teamId/campaigns/:campaignId',
   checkTeamPermissions,

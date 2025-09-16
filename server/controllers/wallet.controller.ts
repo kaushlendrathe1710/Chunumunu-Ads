@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { z } from 'zod';
 import { WalletService } from '../db/services/wallet.service';
 import { AuthenticatedRequest } from '../types';
+import { min } from 'drizzle-orm';
 
 // Validation schemas
 const addFundsSchema = z.object({
@@ -81,8 +82,8 @@ export class WalletController {
     } catch (error) {
       console.error('Add funds error:', error);
 
-      if (error instanceof Error && error.message === 'Insufficient balance') {
-        return res.status(400).json({ error: 'Insufficient balance' });
+      if (error instanceof Error && error.message === 'unable to add funds') {
+        return res.status(400).json({ error: 'unable to add funds' });
       }
 
       res.status(500).json({ error: 'Failed to add funds' });
@@ -103,7 +104,7 @@ export class WalletController {
       const { page, limit } = validation.data;
 
       const pageNum = parseInt(page);
-      const limitNum = parseInt(limit);
+      const limitNum = Math.min(parseInt(limit), 20); // Max limit of 20
       const offset = (pageNum - 1) * limitNum;
 
       const wallet = await WalletService.getOrCreateWallet(userId);

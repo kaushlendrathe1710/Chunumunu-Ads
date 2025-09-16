@@ -101,6 +101,15 @@ export class TeamService {
       where: eq(teamMembers.userId, userId),
       with: {
         team: {
+          columns: {
+            id: true,
+            name: true,
+            description: true,
+            avatar: true,
+            createdAt: true,
+            updatedAt: true,
+            ownerId: true,
+          },
           with: {
             owner: {
               columns: {

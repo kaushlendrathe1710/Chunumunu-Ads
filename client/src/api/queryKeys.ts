@@ -12,6 +12,7 @@ export const QK = {
   campaigns: (teamId: number | string) => ['campaigns', teamId] as const,
   campaign: (teamId: number | string, campaignId: number | string) =>
     ['campaign', teamId, campaignId] as const,
+  teamWalletBalance: (teamId: number | string) => ['team', teamId, 'wallet-balance'] as const,
   ads: (teamId: number | string, filter?: string | number) =>
     filter ? (['ads', teamId, filter] as const) : (['ads', teamId] as const),
   ad: (teamId: number | string, campaignId: number | string, adId: number | string) =>

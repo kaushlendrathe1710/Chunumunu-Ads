@@ -255,19 +255,23 @@ export async function uploadImageToS3(filePath: string, fileName: string): Promi
   }
 }
 
-// Dedicated avatar uploader for predictable key structure: <userId>/profile/<filename>
+// Dedicated avatar uploader for predictable key structure: <userId>/profile/<filename> or teams/<teamId>/avatar/<filename>
 export async function uploadAvatarToS3(
   filePath: string,
   fileName: string,
-  userId: number
+  id: number,
+  type: 'user' | 'team' = 'user'
 ): Promise<string> {
   try {
     if (!filePath) throw new Error('File path is required');
     if (!fileName) throw new Error('File name is required');
-    if (!userId) throw new Error('User ID required for avatar path');
+    if (!id) throw new Error('ID required for avatar path');
 
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = `${userId}/profile/${sanitizedFileName}`; // stable path (overwrites old avatar version implicitly)
+    const key =
+      type === 'team'
+        ? `teams/${id}/avatar/${sanitizedFileName}`
+        : `${id}/profile/${sanitizedFileName}`; // stable path (overwrites old avatar version implicitly)
 
     let contentType = 'image/jpeg';
     if (fileName.endsWith('.png')) contentType = 'image/png';
@@ -291,7 +295,8 @@ export async function uploadAvatarToS3(
           'original-name': sanitizedFileName,
           'upload-timestamp': Date.now().toString(),
           purpose: 'avatar',
-          userId: userId.toString(),
+          [type === 'team' ? 'teamId' : 'userId']: id.toString(),
+          type,
         },
       },
     });

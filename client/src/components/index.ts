@@ -5,6 +5,9 @@ export { default as DashboardLayout } from './layout/DashboardLayout';
 // Team components
 export * from './teams';
 
+// Campaign components
+export * from './campaigns';
+
 // Ad components
 export * from './ads';
 

@@ -1,11 +1,17 @@
 import type { Express } from 'express';
 import { TeamController } from '@server/controllers';
 import { authenticate, requirePermission } from '@server/middleware/auth.middleware';
+import { profileImageUpload } from '../config/multer';
 import campaignRoutes from './campaign.routes';
 
 export function registerTeamRoutes(app: Express): void {
   // Team management routes
-  app.post('/api/teams', authenticate, TeamController.createTeam);
+  app.post(
+    '/api/teams',
+    authenticate,
+    profileImageUpload.fields([{ name: 'avatar', maxCount: 1 }]),
+    TeamController.createTeam
+  );
   app.get('/api/teams/user-teams', authenticate, TeamController.getUserTeams);
   app.get('/api/teams/stats', authenticate, TeamController.getUserTeamStats);
   app.get('/api/teams/:teamId', authenticate, TeamController.getTeamById);
@@ -13,6 +19,7 @@ export function registerTeamRoutes(app: Express): void {
     '/api/teams/:teamId',
     authenticate,
     requirePermission('manage_team'),
+    profileImageUpload.fields([{ name: 'avatar', maxCount: 1 }]),
     TeamController.updateTeam
   );
   app.delete('/api/teams/:teamId', authenticate, TeamController.deleteTeam);
@@ -37,6 +44,9 @@ export function registerTeamRoutes(app: Express): void {
     requirePermission('manage_team'),
     TeamController.removeMember
   );
+
+  // Leave team route (for current user)
+  app.delete('/api/teams/:teamId/leave', authenticate, TeamController.leaveTeam);
 
   // Permission check route
   app.get('/api/teams/:teamId/permissions/:userId', authenticate, TeamController.checkPermission);

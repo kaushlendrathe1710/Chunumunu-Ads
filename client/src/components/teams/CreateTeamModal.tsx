@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useTeam } from '@/hooks/useTeam';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,10 +12,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'react-toastify';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import TeamAPI from '@/api/teamApi';
 import { QK } from '@/api/queryKeys';
+import { Upload, X } from 'lucide-react';
 
 interface CreateTeamModalProps {
   open: boolean;
@@ -25,20 +27,23 @@ interface CreateTeamModalProps {
 export function CreateTeamModal({ open, onOpenChange }: CreateTeamModalProps) {
   const { teamStats } = useTeam();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    avatar: '',
   });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string>('');
 
   const createMutation = useMutation({
-    mutationFn: (payload: { name: string; description?: string; avatar?: string }) =>
-      TeamAPI.createTeam(payload as any),
+    mutationFn: (payload: FormData) => TeamAPI.createTeam(payload),
     onSuccess: () => {
       toast.success('Team created successfully');
       queryClient.invalidateQueries({ queryKey: QK.teams() });
       queryClient.invalidateQueries({ queryKey: QK.teamStats() });
-      setFormData({ name: '', description: '', avatar: '' });
+      setFormData({ name: '', description: '' });
+      setAvatarFile(null);
+      setAvatarPreview('');
       onOpenChange(false);
     },
     onError: (error: any) => {
@@ -62,15 +67,47 @@ export function CreateTeamModal({ open, onOpenChange }: CreateTeamModalProps) {
       return;
     }
 
-    createMutation.mutate({
-      name: formData.name.trim(),
-      description: formData.description.trim() || undefined,
-      avatar: formData.avatar.trim() || undefined,
-    });
+    const formDataToSend = new FormData();
+    formDataToSend.append('name', formData.name.trim());
+    if (formData.description.trim()) {
+      formDataToSend.append('description', formData.description.trim());
+    }
+    if (avatarFile) {
+      formDataToSend.append('avatar', avatarFile);
+    }
+
+    createMutation.mutate(formDataToSend);
   };
 
   const handleInputChange = (field: keyof typeof formData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        // 5MB limit
+        toast.error('Avatar file size must be less than 5MB');
+        return;
+      }
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => setAvatarPreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeAvatar = () => {
+    setAvatarFile(null);
+    setAvatarPreview('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -123,14 +160,42 @@ export function CreateTeamModal({ open, onOpenChange }: CreateTeamModalProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="avatar">Avatar URL</Label>
-            <Input
-              id="avatar"
-              type="url"
-              placeholder="Enter avatar image URL (optional)"
-              value={formData.avatar}
-              onChange={(e) => handleInputChange('avatar', e.target.value)}
-            />
+            <Label htmlFor="avatar">Team Avatar</Label>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={avatarPreview} alt="Team avatar preview" />
+                <AvatarFallback className="text-lg">
+                  {formData.name ? formData.name.slice(0, 2).toUpperCase() : 'T'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 space-y-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Avatar
+                  </Button>
+                  {avatarFile && (
+                    <Button type="button" variant="outline" size="sm" onClick={removeAvatar}>
+                      <X className="mr-2 h-4 w-4" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">PNG, JPG, or GIF. Max size 5MB.</p>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>

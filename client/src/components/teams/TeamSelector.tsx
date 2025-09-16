@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ChevronDown, Plus, Users } from 'lucide-react';
 import { CreateTeamModal } from '.';
 
@@ -23,9 +23,10 @@ export function TeamSelector() {
           <Button variant="outline" className="w-full justify-between">
             <div className="flex items-center gap-2">
               <Avatar className="h-6 w-6">
-                <div className="flex h-full w-full items-center justify-center bg-primary text-xs text-primary-foreground">
+                <AvatarImage src={currentTeam?.avatar || ''} alt={currentTeam?.name || 'Team'} />
+                <AvatarFallback className="text-xs">
                   {currentTeam?.name?.[0]?.toUpperCase() || 'T'}
-                </div>
+                </AvatarFallback>
               </Avatar>
               <span className="truncate">{currentTeam?.name || 'Select Team'}</span>
             </div>
@@ -40,9 +41,8 @@ export function TeamSelector() {
               className="flex items-center gap-2"
             >
               <Avatar className="h-6 w-6">
-                <div className="flex h-full w-full items-center justify-center bg-primary text-xs text-primary-foreground">
-                  {team.name[0].toUpperCase()}
-                </div>
+                <AvatarImage src={team.avatar || ''} alt={team.name} />
+                <AvatarFallback>{team.name.slice(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
               <div className="flex-1 truncate">
                 <div className="truncate font-medium">{team.name}</div>

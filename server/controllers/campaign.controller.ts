@@ -6,7 +6,7 @@ import { AuthenticatedRequest } from '../types';
 import { permission } from '@shared/constants';
 import { deleteFileFromS3 } from '../config/s3';
 // Additional imports for new allocation / refund logic
-import { db } from '@server/db';
+import { db, TeamService, userService } from '@server/db';
 import { ads } from '@server/db/schema';
 import { transactions } from '@server/db/schema/wallet.schema';
 import { and, eq } from 'drizzle-orm';
@@ -52,6 +52,11 @@ export class CampaignController {
       const { teamId } = req.params;
       const userId = req.user!.id;
 
+      const team = await TeamService.getTeamById(parseInt(teamId!));
+      if (!team) {
+        return res.status(404).json({ error: 'Team not found' });
+      }
+
       // Check if user has permission to create campaigns
       if (!req.userPermissions?.includes(permission.create_campaign)) {
         return res.status(403).json({ error: 'Insufficient permissions' });
@@ -59,7 +64,7 @@ export class CampaignController {
 
       // Check wallet balance if budget is specified
       if (validation.data.budget) {
-        const wallet = await WalletService.getOrCreateWallet(userId);
+        const wallet = await WalletService.getOrCreateWallet(team.ownerId);
         const walletBalance = parseFloat(wallet.balance);
 
         if (walletBalance < validation.data.budget) {
@@ -82,11 +87,11 @@ export class CampaignController {
         userId
       );
 
-      // Always deduct full campaign budget from wallet upon creation (allocation phase)
+      // Always deduct full campaign budget from team owner's wallet upon creation (allocation phase)
       if (validation.data.budget) {
         try {
           await WalletService.deductCampaignBudget(
-            userId,
+            team.ownerId, // Use team owner's wallet, not current user's wallet
             campaign.id,
             validation.data.budget.toString(),
             `Budget allocation for campaign: ${campaign.name}`
@@ -157,6 +162,36 @@ export class CampaignController {
     }
   }
 
+  static async getTeamWalletBalance(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { teamId } = req.params;
+
+      // Check if user has permission to view campaigns (needed for campaign creation)
+      if (!req.userPermissions?.includes(permission.view_campaign)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      // Get team to access owner's wallet
+      const team = await TeamService.getTeamById(parseInt(teamId!));
+      if (!team) {
+        return res.status(404).json({ error: 'Team not found' });
+      }
+
+      // Get team owner's wallet balance
+      const wallet = await WalletService.getOrCreateWallet(team.ownerId);
+
+      res.json({
+        balance: wallet.balance,
+        currency: wallet.currency,
+        teamId: team.id,
+        teamName: team.name,
+      });
+    } catch (error) {
+      console.error('Get team wallet balance error:', error);
+      res.status(500).json({ error: 'Failed to fetch team wallet balance' });
+    }
+  }
+
   static async updateCampaign(req: AuthenticatedRequest, res: Response) {
     try {
       const validation = updateCampaignSchema.safeParse(req.body);
@@ -168,10 +203,61 @@ export class CampaignController {
       }
 
       const { teamId, campaignId } = req.params;
+      const userId = req.user!.id;
 
       // Check if user has permission to edit campaigns
       if (!req.userPermissions?.includes(permission.edit_campaign)) {
         return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      // Get the current campaign to compare budget changes
+      const currentCampaign = await CampaignService.getCampaignById(parseInt(campaignId!));
+      if (!currentCampaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+
+      // Get team to access owner's wallet
+      const team = await TeamService.getTeamById(parseInt(teamId!));
+      if (!team) {
+        return res.status(404).json({ error: 'Team not found' });
+      }
+
+      // Handle budget changes with wallet balance validation
+      if (validation.data.budget !== undefined) {
+        const currentBudget = parseFloat(currentCampaign.budget || '0');
+        const newBudget = validation.data.budget;
+        const budgetDifference = newBudget - currentBudget;
+
+        if (budgetDifference > 0) {
+          // Increasing budget - check wallet balance and deduct difference
+          const wallet = await WalletService.getOrCreateWallet(team.ownerId);
+          const walletBalance = parseFloat(wallet.balance);
+
+          if (walletBalance < budgetDifference) {
+            return res.status(400).json({
+              error: 'Insufficient wallet balance for budget increase',
+              required: budgetDifference,
+              available: walletBalance,
+            });
+          }
+
+          // Deduct the additional amount from team owner's wallet
+          await WalletService.deductCampaignBudget(
+            team.ownerId, // Use team owner's wallet
+            parseInt(campaignId!),
+            budgetDifference.toString(),
+            `Budget increase for campaign: ${currentCampaign.name}`
+          );
+        } else if (budgetDifference < 0) {
+          // Decreasing budget - refund the difference to team owner's wallet
+          const refundAmount = Math.abs(budgetDifference);
+          await WalletService.refundCampaignBudget(
+            team.ownerId, // Use team owner's wallet
+            parseInt(campaignId!),
+            refundAmount.toString(),
+            `Budget decrease refund for campaign: ${currentCampaign.name}`
+          );
+        }
       }
 
       const updateData = {
@@ -190,6 +276,11 @@ export class CampaignController {
       res.json(campaign);
     } catch (error) {
       console.error('Update campaign error:', error);
+
+      if (error instanceof Error && error.message === 'Insufficient balance') {
+        return res.status(400).json({ error: 'Insufficient wallet balance' });
+      }
+
       res.status(500).json({ error: 'Failed to update campaign' });
     }
   }
@@ -208,6 +299,12 @@ export class CampaignController {
       const campaign = await CampaignService.getCampaignById(parseInt(campaignId!));
       if (!campaign) {
         return res.status(404).json({ error: 'Campaign not found' });
+      }
+
+      // Get team to access owner's wallet
+      const team = await TeamService.getTeamById(parseInt(teamId!));
+      if (!team) {
+        return res.status(404).json({ error: 'Team not found' });
       }
 
       // Calculate refund amount (budget - spent)
@@ -235,10 +332,10 @@ export class CampaignController {
         }
       }
 
-      // Refund unused budget if any
+      // Refund unused budget to team owner's wallet if any
       if (refundAmount > 0) {
         await WalletService.refundCampaignBudget(
-          userId,
+          team.ownerId, // Refund to team owner's wallet
           parseInt(campaignId!),
           refundAmount.toString(),
           `Refund for deleted campaign: ${campaign.name}`

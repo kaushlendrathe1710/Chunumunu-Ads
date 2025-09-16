@@ -25,8 +25,10 @@ class TeamAPI {
     return data.stats;
   }
 
-  static async createTeam(teamData: InsertTeam): Promise<TeamWithOwner> {
-    const { data } = await apiClient.post<{ team: TeamWithOwner }>('/teams', teamData);
+  static async createTeam(teamData: InsertTeam | FormData): Promise<TeamWithOwner> {
+    const { data } = await apiClient.post<{ team: TeamWithOwner }>('/teams', teamData, {
+      headers: teamData instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    });
     return data.team;
   }
 
@@ -35,8 +37,13 @@ class TeamAPI {
     return data.team;
   }
 
-  static async updateTeam(teamId: number, updates: Partial<InsertTeam>): Promise<TeamWithOwner> {
-    const { data } = await apiClient.put<{ team: TeamWithOwner }>(`/teams/${teamId}`, updates);
+  static async updateTeam(
+    teamId: number,
+    updates: Partial<InsertTeam> | FormData
+  ): Promise<TeamWithOwner> {
+    const { data } = await apiClient.put<{ team: TeamWithOwner }>(`/teams/${teamId}`, updates, {
+      headers: updates instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    });
     return data.team;
   }
 
@@ -81,6 +88,10 @@ class TeamAPI {
 
   static async removeMember(teamId: number, userId: number): Promise<void> {
     await apiClient.delete(`/teams/${teamId}/members/${userId}`);
+  }
+
+  static async leaveTeam(teamId: number): Promise<void> {
+    await apiClient.delete(`/teams/${teamId}/leave`);
   }
 
   // Permissions
