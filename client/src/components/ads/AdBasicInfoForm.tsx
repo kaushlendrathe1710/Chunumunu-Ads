@@ -24,6 +24,7 @@ interface AdFormData {
   ctaLink: string;
   budget: number;
   campaignId: string;
+  status: string;
 }
 
 interface AdBasicInfoFormProps {

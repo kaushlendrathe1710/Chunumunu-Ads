@@ -23,6 +23,7 @@ router.post('/thumbnail', thumbnailUpload.single('thumbnail'), UploadController.
 
 // Delete file route
 router.delete('/file', UploadController.deleteFile);
+router.delete('/delete-file', UploadController.deleteFile);
 
 // Get upload progress (for future chunked uploads)
 router.get('/progress/:uploadId', UploadController.getUploadProgress);

@@ -3,6 +3,7 @@ import { TeamController } from '@server/controllers';
 import { authenticate, requirePermission } from '@server/middleware/auth.middleware';
 import { profileImageUpload } from '../config/multer';
 import campaignRoutes from './campaign.routes';
+import adsRoutes from './ads.routes';
 
 export function registerTeamRoutes(app: Express): void {
   // Team management routes
@@ -53,4 +54,5 @@ export function registerTeamRoutes(app: Express): void {
 
   // Campaign and ads routes
   app.use('/api', campaignRoutes);
+  app.use('/api', adsRoutes);
 }

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/common/DatePicker';
 import { toast } from 'react-toastify';
@@ -14,6 +16,7 @@ import CampaignAPI, {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QK } from '@/api/queryKeys';
 import { campaignSchema } from '@/utils/schemas';
+import { campaignStatus } from '@shared/constants';
 
 interface EditCampaignDialogProps {
   campaign: CampaignDto | null;
@@ -29,6 +32,7 @@ interface EditCampaignData {
   budget: number;
   startDate: Date | undefined;
   endDate: Date | undefined;
+  status: string;
 }
 
 export function EditCampaignDialog({
@@ -44,6 +48,7 @@ export function EditCampaignDialog({
     budget: 0,
     startDate: undefined,
     endDate: undefined,
+    status: campaignStatus.draft,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -69,7 +74,7 @@ export function EditCampaignDialog({
       });
     }
 
-    return () =>{
+    return () => {
       setFormData({
         name: '',
         description: '',
@@ -77,7 +82,7 @@ export function EditCampaignDialog({
         startDate: undefined,
         endDate: undefined,
       });
-    }
+    };
   }, [campaign]);
 
   const handleSubmit = async (e: React.FormEvent) => {

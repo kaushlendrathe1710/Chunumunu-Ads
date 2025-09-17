@@ -184,7 +184,7 @@ export class UploadController {
 
   static async getPresignedUrl(req: AuthenticatedRequest, res: Response) {
     try {
-      const { fileName, contentType, fileType } = req.body;
+      const { fileName, contentType, fileType, context = {} } = req.body;
 
       if (!fileName || !fileType) {
         return res.status(400).json({
@@ -192,20 +192,45 @@ export class UploadController {
         });
       }
 
-      if (!['video', 'thumbnail'].includes(fileType)) {
+      if (!['video', 'thumbnail', 'avatar'].includes(fileType)) {
         return res.status(400).json({
-          error: 'fileType must be either "video" or "thumbnail"',
+          error: 'fileType must be "video", "thumbnail", or "avatar"',
         });
       }
 
       const userId = req.user!.id;
 
-      // Generate presigned URL
+      // Generate file path based on context and fileType
+      let filePath: string;
+
+      if (fileType === 'avatar') {
+        if (context.teamId) {
+          filePath = `teams/${context.teamId}/avatar`;
+        } else {
+          filePath = `users/${context.userId || userId}/avatar`;
+        }
+      } else {
+        // For video and thumbnail
+        if (!context.teamId || !context.campaignId) {
+          return res.status(400).json({
+            error: 'teamId and campaignId are required for video/thumbnail uploads',
+          });
+        }
+
+        if (context.adId) {
+          filePath = `teams/${context.teamId}/campaigns/${context.campaignId}/ads/${context.adId}/${fileType}`;
+        } else {
+          filePath = `teams/${context.teamId}/campaigns/${context.campaignId}/${fileType}`;
+        }
+      }
+
+      // Generate presigned URL with custom path
       const { url, key } = await generatePresignedUrlForUpload(
         fileName,
         contentType,
-        userId,
-        3600 // 1 hour expiry
+        filePath,
+        3600, // 1 hour expiry
+        req.user?.id // Pass the user ID from the authenticated request
       );
 
       // Construct the final URL that will be accessible after upload

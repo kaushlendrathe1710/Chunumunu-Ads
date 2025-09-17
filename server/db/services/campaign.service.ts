@@ -1,7 +1,7 @@
 import { db } from '@server/db';
-import { campaigns, ads } from '@server/db/schema';
-import { eq, desc } from 'drizzle-orm';
-import { InsertCampaign, Campaign, InsertAd, Ad } from '@shared/types';
+import { campaigns } from '@server/db/schema';
+import { eq } from 'drizzle-orm';
+import { InsertCampaign, Campaign } from '@shared/types';
 
 export class CampaignService {
   static async createCampaign(campaignData: InsertCampaign, createdBy: number) {
@@ -82,104 +82,45 @@ export class CampaignService {
     await db.delete(campaigns).where(eq(campaigns.id, campaignId));
   }
 
-  // Ad methods
-  static async createAd(adData: InsertAd, createdBy: number) {
-    const [ad] = await db
-      .insert(ads)
-      .values({
-        ...adData,
-        createdBy,
-      })
-      .returning();
-
-    return ad;
-  }
-
-  static async getAdById(adId: number): Promise<Ad | null> {
-    const result = await db.query.ads.findFirst({
-      where: eq(ads.id, adId),
-      with: {
-        creator: {
-          columns: {
-            id: true,
-            username: true,
-            email: true,
-            avatar: true,
-          },
-        },
-        campaign: {
-          columns: {
-            id: true,
-            name: true,
-            teamId: true,
-          },
-        },
-      },
-    });
-
-    return result || null;
-  }
-
-  static async getCampaignAds(campaignId: number): Promise<Ad[]> {
-    const result = await db.query.ads.findMany({
-      where: eq(ads.campaignId, campaignId),
-      with: {
-        creator: {
-          columns: {
-            id: true,
-            username: true,
-            email: true,
-            avatar: true,
-          },
-        },
-        campaign: {
-          columns: {
-            id: true,
-            name: true,
-            teamId: true,
-          },
-        },
-      },
-      orderBy: (ads, { desc }) => [desc(ads.createdAt)],
-    });
-
-    return result;
-  }
-
-  static async updateAd(adId: number, updates: Partial<InsertAd>) {
-    const [ad] = await db
-      .update(ads)
+  /**
+   * Update campaign spent amount (when ad budget is allocated)
+   */
+  static async updateCampaignSpent(campaignId: number, spentAmount: number) {
+    const [campaign] = await db
+      .update(campaigns)
       .set({
-        ...updates,
+        spent: spentAmount.toString(),
         updatedAt: new Date(),
       })
-      .where(eq(ads.id, adId))
+      .where(eq(campaigns.id, campaignId))
       .returning();
 
-    return ad;
+    return campaign;
   }
 
-  static async deleteAd(adId: number) {
-    await db.delete(ads).where(eq(ads.id, adId));
+  /**
+   * Add to campaign spent amount (when ad budget is allocated)
+   */
+  static async addToCampaignSpent(campaignId: number, additionalSpent: number) {
+    const campaign = await this.getCampaignById(campaignId);
+    if (!campaign) throw new Error('Campaign not found');
+
+    const currentSpent = parseFloat(campaign.spent || '0');
+    const newSpent = currentSpent + additionalSpent;
+
+    return this.updateCampaignSpent(campaignId, newSpent);
   }
 
-  // Get all ads for a team (across all campaigns)
-  static async getTeamAds(teamId: number): Promise<Ad[]> {
-    const result = await db
-      .select()
-      .from(ads)
-      .innerJoin(campaigns, eq(ads.campaignId, campaigns.id))
-      .where(eq(campaigns.teamId, teamId))
-      .orderBy(desc(ads.createdAt));
+  /**
+   * Subtract from campaign spent amount (when ad budget is refunded)
+   */
+  static async subtractFromCampaignSpent(campaignId: number, refundAmount: number) {
+    const campaign = await this.getCampaignById(campaignId);
+    if (!campaign) throw new Error('Campaign not found');
 
-    // Transform the result to match the Ad type with campaign info
-    return result.map((row) => ({
-      ...row.ads,
-      campaign: {
-        id: row.campaigns.id,
-        name: row.campaigns.name,
-        teamId: row.campaigns.teamId,
-      },
-    }));
+    const currentSpent = parseFloat(campaign.spent || '0');
+    const newSpent = Math.max(0, currentSpent - refundAmount);
+
+    return this.updateCampaignSpent(campaignId, newSpent);
   }
 }

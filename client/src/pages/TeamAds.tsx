@@ -3,6 +3,7 @@ import { useTeam } from '@/hooks/useTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Dialog,
   DialogContent,
@@ -17,9 +18,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, MoreVertical, Play, Pause, Eye, Trash2, Filter } from 'lucide-react';
+import { Plus, MoreVertical, Eye, Trash2, Filter, Edit, User } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { CreateAdDialog } from '@/components/ads';
+import { CreateAdDialog, EditAdDialog, ViewAdDialog } from '@/components/ads';
 import {
   Select,
   SelectContent,
@@ -42,6 +43,8 @@ export default function TeamAds() {
   const [campaigns, setCampaigns] = useState<{ id: number; name: string }[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<string>('all');
   const [deleteTarget, setDeleteTarget] = useState<Ad | null>(null);
+  const [editingAd, setEditingAd] = useState<Ad | null>(null);
+  const [viewingAd, setViewingAd] = useState<Ad | null>(null);
   const queryClient = useQueryClient();
 
   const campaignsQuery = useQuery<AdDto[] | any[]>({
@@ -223,8 +226,22 @@ export default function TeamAds() {
                       <CardDescription className="mt-2">{ad.description}</CardDescription>
                     )}
                     <div className="mt-3">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <span>Campaign: {ad.campaignName}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <span>Campaign: {ad.campaign?.name}</span>
+                        </div>
+                        {ad.creator && (
+                          <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <User className="h-4 w-4" />
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={ad.creator.avatar || undefined} />
+                              <AvatarFallback className="text-xs">
+                                {ad.creator.username.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{ad.creator.username}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -247,25 +264,11 @@ export default function TeamAds() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {ad.status === 'draft' && (
-                          <DropdownMenuItem onClick={() => handleStatusChange(ad, 'active')}>
-                            <Play className="mr-2 h-4 w-4" />
-                            Activate Ad
-                          </DropdownMenuItem>
-                        )}
-                        {ad.status === 'active' && (
-                          <DropdownMenuItem onClick={() => handleStatusChange(ad, 'paused')}>
-                            <Pause className="mr-2 h-4 w-4" />
-                            Pause Ad
-                          </DropdownMenuItem>
-                        )}
-                        {ad.status === 'paused' && (
-                          <DropdownMenuItem onClick={() => handleStatusChange(ad, 'active')}>
-                            <Play className="mr-2 h-4 w-4" />
-                            Resume Ad
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setEditingAd(ad)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit Ad
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setViewingAd(ad)}>
                           <Eye className="mr-2 h-4 w-4" />
                           View Details
                         </DropdownMenuItem>
@@ -374,6 +377,43 @@ export default function TeamAds() {
               Delete
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Ad Dialog */}
+      <Dialog open={!!editingAd} onOpenChange={(o) => !o && setEditingAd(null)}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Ad</DialogTitle>
+          </DialogHeader>
+          {editingAd && (
+            <EditAdDialog
+              teamId={currentTeam!.id}
+              campaignId={editingAd.campaignId}
+              ad={editingAd}
+              onSuccess={() => setEditingAd(null)}
+              onCancel={() => setEditingAd(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View Ad Dialog */}
+      <Dialog open={!!viewingAd} onOpenChange={(o) => !o && setViewingAd(null)}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Ad Details</DialogTitle>
+          </DialogHeader>
+          {viewingAd && (
+            <ViewAdDialog
+              ad={viewingAd}
+              onEdit={() => {
+                setViewingAd(null);
+                setEditingAd(viewingAd);
+              }}
+              onClose={() => setViewingAd(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

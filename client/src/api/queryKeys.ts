@@ -13,10 +13,19 @@ export const QK = {
   campaign: (teamId: number | string, campaignId: number | string) =>
     ['campaign', teamId, campaignId] as const,
   teamWalletBalance: (teamId: number | string) => ['team', teamId, 'wallet-balance'] as const,
+  
+  // Ad-related query keys
   ads: (teamId: number | string, filter?: string | number) =>
     filter ? (['ads', teamId, filter] as const) : (['ads', teamId] as const),
+  campaignAds: (teamId: number | string, campaignId: number | string) =>
+    ['ads', teamId, 'campaign', campaignId] as const,
   ad: (teamId: number | string, campaignId: number | string, adId: number | string) =>
     ['ad', teamId, campaignId, adId] as const,
+  adBudgetInfo: (teamId: number | string, campaignId: number | string, requestedBudget?: number) =>
+    requestedBudget 
+      ? (['ad-budget', teamId, campaignId, requestedBudget] as const)
+      : (['ad-budget', teamId, campaignId] as const),
+  
   wallet: () => ['wallet'] as const,
   walletTx: (page: number, limit: number) => ['wallet', 'transactions', page, limit] as const,
   walletTransactions: (page: number, limit: number) =>

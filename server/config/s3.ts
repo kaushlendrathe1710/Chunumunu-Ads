@@ -120,8 +120,9 @@ export async function getPresignedUrl(key: string, expiresIn = 3600): Promise<st
 export async function generatePresignedUrlForUpload(
   fileName: string,
   contentType: string = 'video/mp4',
-  userId: number = 0,
-  expiresIn = 3600
+  basePath: string = 'uploads',
+  expiresIn = 3600,
+  userId?: number
 ): Promise<{ url: string; key: string }> {
   try {
     // Clean the filename to prevent S3 path issues
@@ -130,7 +131,7 @@ export async function generatePresignedUrlForUpload(
     // Create a unique file key (path in S3) with UUID for collision prevention
     const timestamp = Date.now();
     const uuid = Math.random().toString(36).substring(2, 15);
-    const key = `${userId}/videos/${timestamp}-${uuid}-${sanitizedFileName}`;
+    const key = `${basePath}/${timestamp}-${uuid}-${sanitizedFileName}`;
 
     // Detect content type based on file extension if not provided
     if (!contentType) {
@@ -138,6 +139,9 @@ export async function generatePresignedUrlForUpload(
       else if (fileName.endsWith('.mov')) contentType = 'video/quicktime';
       else if (fileName.endsWith('.avi')) contentType = 'video/x-msvideo';
       else if (fileName.endsWith('.mkv')) contentType = 'video/x-matroska';
+      else if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) contentType = 'image/jpeg';
+      else if (fileName.endsWith('.png')) contentType = 'image/png';
+      else if (fileName.endsWith('.webp')) contentType = 'image/webp';
       else contentType = 'video/mp4'; // Default
     }
 
@@ -151,7 +155,7 @@ export async function generatePresignedUrlForUpload(
         'original-filename': sanitizedFileName,
         'upload-timestamp': timestamp.toString(),
         'upload-method': 'direct',
-        'user-Id': userId.toString(),
+        ...(userId && { 'user-Id': userId.toString() }),
       },
     });
 

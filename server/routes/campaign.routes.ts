@@ -38,51 +38,11 @@ router.delete(
   CampaignController.deleteCampaign
 );
 
-// Team ads route (all ads across campaigns)
-router.get('/teams/:teamId/ads', checkTeamPermissions, CampaignController.getTeamAds);
-
-// Ad routes
-router.post(
-  '/teams/:teamId/campaigns/:campaignId/ads',
-  checkTeamPermissions,
-  CampaignController.createAd
-);
-
-router.get(
-  '/teams/:teamId/campaigns/:campaignId/ads',
-  checkTeamPermissions,
-  CampaignController.getAds
-);
-
-router.get(
-  '/teams/:teamId/campaigns/:campaignId/ads/:adId',
-  checkTeamPermissions,
-  CampaignController.getAd
-);
-
-router.put(
-  '/teams/:teamId/campaigns/:campaignId/ads/:adId',
-  checkTeamPermissions,
-  CampaignController.updateAd
-);
-
-router.delete(
-  '/teams/:teamId/campaigns/:campaignId/ads/:adId',
-  checkTeamPermissions,
-  CampaignController.deleteAd
-);
-
 // Analytics routes
 router.get(
   '/teams/:teamId/campaigns/:campaignId/analytics',
   checkTeamPermissions,
   CampaignController.getCampaignAnalytics
-);
-
-router.get(
-  '/teams/:teamId/campaigns/:campaignId/ads/:adId/analytics',
-  checkTeamPermissions,
-  CampaignController.getAdAnalytics
 );
 
 export default router;

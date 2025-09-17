@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Upload, Video, Image, X, CheckCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { getPresignedUploadUrl } from '@/api/uploadApi';
+import { getPresignedUploadUrl, deleteFile, UploadContext } from '@/api/uploadApi';
 
 interface UploadedFile {
   file: File;
@@ -22,6 +22,9 @@ interface AdVideoUploadFormProps {
   onThumbnailUpload: (file: UploadedFile) => void;
   onVideoRemove: () => void;
   onThumbnailRemove: () => void;
+  existingVideoUrl?: string;
+  existingThumbnailUrl?: string;
+  uploadContext?: UploadContext;
 }
 
 export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
@@ -31,6 +34,9 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
   onThumbnailUpload,
   onVideoRemove,
   onThumbnailRemove,
+  existingVideoUrl,
+  existingThumbnailUrl,
+  uploadContext,
 }) => {
   const [videoUploading, setVideoUploading] = useState(false);
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
@@ -99,8 +105,23 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
     setVideoProgress(0);
 
     try {
-      // Get presigned URL
-      const { presignedUrl, finalUrl, key } = await getPresignedUrl(file.name, file.type, 'video');
+      // Delete existing file if replacing
+      if (existingVideoUrl && uploadContext) {
+        try {
+          const key = existingVideoUrl.split('/').pop() || '';
+          await deleteFile(key);
+        } catch (deleteError) {
+          console.warn('Failed to delete existing video:', deleteError);
+        }
+      }
+
+      // Get presigned URL with context
+      const { presignedUrl, finalUrl, key } = await getPresignedUploadUrl(
+        file.name,
+        file.type,
+        'video',
+        uploadContext
+      );
 
       // Upload to S3
       await uploadToS3(file, presignedUrl, setVideoProgress);
@@ -143,11 +164,22 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
     setThumbnailProgress(0);
 
     try {
-      // Get presigned URL
-      const { presignedUrl, finalUrl, key } = await getPresignedUrl(
+      // Delete existing file if replacing
+      if (existingThumbnailUrl && uploadContext) {
+        try {
+          const key = existingThumbnailUrl.split('/').pop() || '';
+          await deleteFile(key);
+        } catch (deleteError) {
+          console.warn('Failed to delete existing thumbnail:', deleteError);
+        }
+      }
+
+      // Get presigned URL with context
+      const { presignedUrl, finalUrl, key } = await getPresignedUploadUrl(
         file.name,
         file.type,
-        'thumbnail'
+        'thumbnail',
+        uploadContext
       );
 
       // Upload to S3
@@ -185,7 +217,7 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!videoFile ? (
+          {!videoFile && !existingVideoUrl ? (
             <div className="space-y-3">
               <div className="grid w-full max-w-sm items-center gap-1.5">
                 <Label htmlFor="video">Video File</Label>
@@ -208,7 +240,7 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
                 </div>
               )}
             </div>
-          ) : (
+          ) : videoFile ? (
             <div className="flex items-center justify-between rounded-md border bg-green-50 p-3">
               <div className="flex items-center space-x-3">
                 <CheckCircle className="h-5 w-5 text-green-600" />
@@ -230,7 +262,39 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
                 <X className="h-4 w-4" />
               </Button>
             </div>
-          )}
+          ) : existingVideoUrl ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-md border bg-blue-50 p-3">
+                <div className="flex items-center space-x-3">
+                  <Video className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <p className="font-medium text-blue-900">Current Video</p>
+                    <p className="text-sm text-blue-700">Click to replace with new video</p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid w-full max-w-sm items-center gap-1.5">
+                <Label htmlFor="video-replace">Replace Video File</Label>
+                <Input
+                  ref={videoInputRef}
+                  id="video-replace"
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoFileChange}
+                  disabled={videoUploading}
+                />
+              </div>
+              {videoUploading && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Uploading replacement...</span>
+                    <span>{videoProgress}%</span>
+                  </div>
+                  <Progress value={videoProgress} />
+                </div>
+              )}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -244,7 +308,7 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
           <CardDescription>Upload a thumbnail for your ad. Maximum size: 10MB</CardDescription>
         </CardHeader>
         <CardContent>
-          {!thumbnailFile ? (
+          {!thumbnailFile && !existingThumbnailUrl ? (
             <div className="space-y-3">
               <div className="grid w-full max-w-sm items-center gap-1.5">
                 <Label htmlFor="thumbnail">Thumbnail Image</Label>
@@ -267,7 +331,7 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
                 </div>
               )}
             </div>
-          ) : (
+          ) : thumbnailFile ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between rounded-md border bg-green-50 p-3">
                 <div className="flex items-center space-x-3">
@@ -300,7 +364,46 @@ export const AdVideoUploadForm: React.FC<AdVideoUploadFormProps> = ({
                 </div>
               )}
             </div>
-          )}
+          ) : existingThumbnailUrl ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-md border bg-blue-50 p-3">
+                <div className="flex items-center space-x-3">
+                  <Image className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <p className="font-medium text-blue-900">Current Thumbnail</p>
+                    <p className="text-sm text-blue-700">Click to replace with new image</p>
+                  </div>
+                </div>
+              </div>
+              <div className="relative h-20 w-32 overflow-hidden rounded-md border">
+                <img
+                  src={existingThumbnailUrl}
+                  alt="Current thumbnail"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="grid w-full max-w-sm items-center gap-1.5">
+                <Label htmlFor="thumbnail-replace">Replace Thumbnail</Label>
+                <Input
+                  ref={thumbnailInputRef}
+                  id="thumbnail-replace"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbnailFileChange}
+                  disabled={thumbnailUploading}
+                />
+              </div>
+              {thumbnailUploading && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Uploading replacement...</span>
+                    <span>{thumbnailProgress}%</span>
+                  </div>
+                  <Progress value={thumbnailProgress} />
+                </div>
+              )}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

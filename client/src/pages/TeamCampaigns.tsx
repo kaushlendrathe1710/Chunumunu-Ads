@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +24,11 @@ import {
 import { Plus, MoreVertical, Eye, Wallet, AlertCircle, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { DatePicker } from '@/components/common/DatePicker';
-import CampaignAPI, { CreateCampaignPayload, TeamWalletBalance } from '@/api/campaignApi';
+import CampaignAPI, {
+  CreateCampaignPayload,
+  TeamWalletBalance,
+  CampaignDto,
+} from '@/api/campaignApi';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QK } from '@/api/queryKeys';
 import { campaignSchema } from '@/utils/schemas';
@@ -30,6 +36,8 @@ import { z } from 'zod';
 import { EditCampaignDialog } from '@/components/campaigns/EditCampaignDialog';
 import { CampaignDetailsDialog } from '@/components/campaigns/CampaignDetailsDialog';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { getCampaignAvailableBalance } from '@/utils';
+import { campaignStatus } from '@shared/constants';
 
 interface Campaign {
   id: string;
@@ -58,6 +66,7 @@ interface CreateCampaignData {
   budget: number;
   startDate: Date | undefined;
   endDate: Date | undefined;
+  status: string;
 }
 
 interface WalletBalance {
@@ -80,20 +89,31 @@ export default function TeamCampaigns() {
     budget: 0,
     startDate: undefined,
     endDate: undefined,
+    status: campaignStatus.draft,
   });
 
   const queryClient = useQueryClient();
-  const campaignsQuery = useQuery<Campaign[]>({
+  const campaignsQuery = useQuery<CampaignDto[]>({
     queryKey: currentTeam ? QK.campaigns(currentTeam.id) : ['campaigns', 'noop'],
     queryFn: async () => {
       if (!currentTeam) return [];
       const list = await CampaignAPI.list(currentTeam.id);
-      return list.map((c: any) => ({
+      return list;
+    },
+    enabled: !!currentTeam,
+    placeholderData: (prev) => prev, // SWR: show old data while fetching
+  });
+
+  // Sync local campaigns state for potential future optimistic edits
+  useEffect(() => {
+    if (campaignsQuery.data) {
+      // Map CampaignDto to local Campaign shape
+      const mapped = campaignsQuery.data.map((c) => ({
         id: c.id.toString(),
         name: c.name,
         description: c.description,
         status: c.status,
-        budget: parseFloat(c.budget || '0'),
+        budget: parseFloat(c.budget || '-1'),
         spent: parseFloat(c.spent || '0'),
         impressions: c.impressions || 0,
         clicks: c.clicks || 0,
@@ -103,20 +123,12 @@ export default function TeamCampaigns() {
         updatedAt: c.updatedAt,
         creator: c.creator,
       }));
-    },
-    enabled: !!currentTeam,
-    placeholderData: (prev) => prev, // SWR: show old data while fetching
-  });
-
-  // Sync local campaigns state for potential future optimistic edits
-  useEffect(() => {
-    if (campaignsQuery.data && campaignsQuery.data !== campaigns) {
-      setCampaigns(campaignsQuery.data);
+      setCampaigns(mapped);
     }
-  }, [campaignsQuery.data, campaigns]);
+  }, [campaignsQuery.data]);
 
   // Fetch team wallet balance (owner's wallet visible to all team members)
-  const { data: teamWalletBalance } = useQuery<TeamWalletBalance>({
+  const teamWalletBalanceQuery = useQuery<TeamWalletBalance | null>({
     queryKey: currentTeam ? QK.teamWalletBalance(currentTeam.id) : ['team-wallet', 'noop'],
     queryFn: async () => {
       if (!currentTeam) return null;
@@ -129,8 +141,9 @@ export default function TeamCampaigns() {
     },
     enabled: !!currentTeam,
     staleTime: 30_000,
-    placeholderData: (prev) => prev,
+    placeholderData: (prev) => prev || null,
   });
+  const teamWalletBalance = teamWalletBalanceQuery.data;
 
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,7 +179,7 @@ export default function TeamCampaigns() {
         budget: formData.budget,
         startDate: formData.startDate.toISOString(),
         endDate: formData.endDate.toISOString(),
-        status: 'draft',
+        status: formData.status as any,
       };
       await CampaignAPI.create(currentTeam.id, payload);
       toast.success('Campaign created successfully');
@@ -177,6 +190,7 @@ export default function TeamCampaigns() {
         budget: 0,
         startDate: undefined,
         endDate: undefined,
+        status: campaignStatus.draft,
       });
       queryClient.invalidateQueries({ queryKey: QK.campaigns(currentTeam.id) });
       queryClient.invalidateQueries({ queryKey: QK.teamWalletBalance(currentTeam.id) });
@@ -372,6 +386,40 @@ export default function TeamCampaigns() {
                   />
                 </div>
 
+                <div>
+                  <label className="mb-3 block text-sm font-medium">Campaign Status</label>
+                  <RadioGroup
+                    value={formData.status}
+                    onValueChange={(value) => setFormData({ ...formData, status: value })}
+                    className="grid grid-cols-2 gap-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value={campaignStatus.draft} id="draft" />
+                      <Label htmlFor="draft" className="font-normal">
+                        Draft
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value={campaignStatus.active} id="active" />
+                      <Label htmlFor="active" className="font-normal">
+                        Active
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value={campaignStatus.paused} id="paused" />
+                      <Label htmlFor="paused" className="font-normal">
+                        Paused
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value={campaignStatus.completed} id="completed" />
+                      <Label htmlFor="completed" className="font-normal">
+                        Completed
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
                 <div className="flex gap-3 pt-4">
                   <Button
                     type="submit"
@@ -462,7 +510,7 @@ export default function TeamCampaigns() {
               </CardHeader>
 
               <CardContent>
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                   <div className="text-center">
                     <p className="text-2xl font-bold text-green-600">
                       {formatCurrency(campaign.budget)}
@@ -475,6 +523,16 @@ export default function TeamCampaigns() {
                       {formatCurrency(campaign.spent)}
                     </p>
                     <p className="text-sm text-gray-500">Spent</p>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-indigo-600">
+                      {(() => {
+                        const val = getCampaignAvailableBalance(campaign.budget, campaign.spent);
+                        return val === 'Unlimited' ? 'Unlimited' : formatCurrency(val as number);
+                      })()}
+                    </p>
+                    <p className="text-sm text-gray-500">Available</p>
                   </div>
 
                   <div className="text-center">

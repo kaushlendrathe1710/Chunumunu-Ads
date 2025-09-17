@@ -1,13 +1,6 @@
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
-import {
-  teams,
-  teamMembers,
-  campaigns,
-  ads,
-  teamRoleEnum,
-  permissionEnum,
-} from '@server/db/schema';
+import { teams, teamMembers, teamRoleEnum, permissionEnum } from '@server/db/schema';
 
 // Insert schemas
 export const insertTeamSchema = createInsertSchema(teams).pick({
@@ -21,29 +14,6 @@ export const insertTeamMemberSchema = createInsertSchema(teamMembers).pick({
   userId: true,
   role: true,
   permissions: true,
-});
-
-export const insertCampaignSchema = createInsertSchema(campaigns).pick({
-  name: true,
-  description: true,
-  status: true,
-  budget: true,
-  startDate: true,
-  endDate: true,
-  teamId: true,
-});
-
-export const insertAdSchema = createInsertSchema(ads).pick({
-  title: true,
-  description: true,
-  categories: true,
-  tags: true,
-  ctaLink: true,
-  videoUrl: true,
-  thumbnailUrl: true,
-  budget: true,
-  status: true,
-  campaignId: true,
 });
 
 // TypeScript types
@@ -76,12 +46,6 @@ export type TeamMemberWithUser = TeamMember & {
 
 export type TeamRole = (typeof teamRoleEnum.enumValues)[number];
 export type Permission = (typeof permissionEnum.enumValues)[number];
-
-export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
-export type Campaign = typeof campaigns.$inferSelect;
-
-export type InsertAd = z.infer<typeof insertAdSchema>;
-export type Ad = typeof ads.$inferSelect;
 
 // Update team validation schema
 export const updateTeamSchema = z.object({
