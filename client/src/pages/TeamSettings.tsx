@@ -31,16 +31,14 @@ import { Label } from '@/components/ui/label';
 import { UserPlus, MoreVertical, Settings, Plus } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { TeamMemberWithUser, TeamRole, Permission } from '@shared/types';
-import { limits, permission } from '@shared/constants';
+import { limits, permission, teamRole } from '@shared/constants';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import TeamAPI from '@/api/teamApi';
 import { QK } from '@/api/queryKeys';
 
 export default function TeamSettings() {
-  const { currentTeam, userRole } = useTeam();
-  const [members, setMembers] = useState<TeamMemberWithUser[]>([]);
+  const { currentTeam, userRole, hasPermission } = useTeam();
   const [inviteEmail, setInviteEmail] = useState('');
-  const [loading, setLoading] = useState(true);
   const [editPermissionsOpen, setEditPermissionsOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMemberWithUser | null>(null);
   const [editingPermissions, setEditingPermissions] = useState<Permission[]>([]);
@@ -81,15 +79,6 @@ export default function TeamSettings() {
       currentTeam ? TeamAPI.getTeamMembers(currentTeam.id) : (Promise.resolve([]) as any),
     enabled: !!currentTeam,
   });
-  if (!membersQuery.isLoading && loading) {
-    if (membersQuery.error) {
-      toast.error('Failed to load team members');
-      setMembers([]);
-    } else if (membersQuery.data) {
-      setMembers(membersQuery.data);
-    }
-    setLoading(false);
-  }
 
   const inviteMutation = useMutation({
     mutationFn: (vars: { email: string }) =>
@@ -108,6 +97,10 @@ export default function TeamSettings() {
 
   const handleInviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (userRole !== teamRole.owner && !hasPermission(permission.manage_team)) {
+      toast.error('You do not have permission to manage team.');
+      return;
+    }
     if (!currentTeam || !inviteEmail.trim()) return;
     inviteMutation.mutate({ email: inviteEmail.trim() });
   };
@@ -237,16 +230,18 @@ export default function TeamSettings() {
               />
               <Button
                 type="submit"
-                disabled={!inviteEmail.trim() || (members?.length || 0) >= limits.maxMembersPerTeam}
+                disabled={
+                  !inviteEmail.trim() ||
+                  (membersQuery.data?.length || 0) >= limits.maxMembersPerTeam
+                }
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Member
               </Button>
             </form>
           </CardContent>
-          {/* {!(members?.length < limits.maxMembersPerTeam) && ( */}
-          {members
-            ? members.length >= limits.maxMembersPerTeam
+          {membersQuery.data
+            ? membersQuery.data.length >= limits.maxMembersPerTeam
             : true && (
                 <CardFooter>
                   <p className="text-sm text-destructive">
@@ -261,24 +256,28 @@ export default function TeamSettings() {
       <Card>
         <CardHeader>
           <CardTitle>
-            Team Members ({members?.length || 0}/{limits.maxMembersPerTeam})
+            Team Members ({membersQuery.data?.length || 0}/{limits.maxMembersPerTeam})
           </CardTitle>
           <CardDescription>
             Current members of team: {currentTeam?.name || 'Unknown Team'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {membersQuery.isLoading ? (
             <div className="py-8 text-center">
               <p className="text-gray-500">Loading team members...</p>
             </div>
-          ) : !members || members.length === 0 ? (
+          ) : membersQuery.error ? (
+            <div className="py-8 text-center">
+              <p className="text-red-500">Failed to load team members</p>
+            </div>
+          ) : !membersQuery.data || membersQuery.data.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-gray-500">No team members found.</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {(members || []).map((member) => (
+              {(membersQuery.data || []).map((member) => (
                 <div
                   key={member.id}
                   className="flex items-center justify-between rounded-lg border p-4"
@@ -309,8 +308,8 @@ export default function TeamSettings() {
                   <div className="flex items-center gap-3">
                     <Badge className={getRoleBadgeColor(member.role)}>{member.role}</Badge>
 
-                    {/* Only owners can manage other members */}
-                    {userRole === 'owner' && member.role !== 'owner' && (
+                    {/* Only owners and member with manage_team permission can manage team members */}
+                    {hasPermission(permission.manage_team) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm">

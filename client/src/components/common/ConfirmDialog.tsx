@@ -1,13 +1,14 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { AlertTriangle } from 'lucide-react';
 
 interface ConfirmDialogProps {
@@ -21,6 +22,7 @@ interface ConfirmDialogProps {
   onCancel?: () => void;
   variant?: 'destructive' | 'default';
   isLoading?: boolean;
+  children?: React.ReactNode; // For custom content like refund info
 }
 
 export function ConfirmDialog({
@@ -34,6 +36,7 @@ export function ConfirmDialog({
   onCancel,
   variant = 'default',
   isLoading = false,
+  children,
 }: ConfirmDialogProps) {
   const handleCancel = () => {
     if (onCancel) {
@@ -47,30 +50,30 @@ export function ConfirmDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="sm:max-w-[425px]">
+        <AlertDialogHeader>
           <div className="flex items-center gap-3">
             {variant === 'destructive' && <AlertTriangle className="size-5 text-red-500" />}
-            <DialogTitle>{title}</DialogTitle>
+            <AlertDialogTitle>{title}</AlertDialogTitle>
           </div>
-          <DialogDescription className="text-left">{description}</DialogDescription>
-        </DialogHeader>
+          <AlertDialogDescription className="text-left">{description}</AlertDialogDescription>
+          {children && <div className="mt-3">{children}</div>}
+        </AlertDialogHeader>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={handleCancel} disabled={isLoading}>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={handleCancel} disabled={isLoading}>
             {cancelText}
-          </Button>
-          <Button
-            type="button"
-            variant={variant === 'destructive' ? 'destructive' : 'default'}
+          </AlertDialogCancel>
+          <AlertDialogAction
             onClick={handleConfirm}
             disabled={isLoading}
+            className={variant === 'destructive' ? 'bg-red-600 hover:bg-red-700' : ''}
           >
             {isLoading ? 'Processing...' : confirmText}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

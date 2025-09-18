@@ -15,9 +15,9 @@ export default function Auth() {
 
   // Set document title
   useEffect(() => {
-    document.title = 'Sign in - ChunuMunu';
+    document.title = 'Sign in - ChunuMunu Ads';
     return () => {
-      document.title = 'ChunuMunu';
+      document.title = 'ChunuMunu Ads';
     };
   }, []);
 
@@ -37,7 +37,6 @@ export default function Auth() {
       <Card className="mx-4 w-full max-w-md bg-card">
         <CardContent className="px-8 pb-8 pt-6">
           <div className="mb-6 flex flex-col items-center text-center">
-            {/* <i className="ri-video-fill text-primary text-4xl"></i> */}
             <img src={logo} alt="Logo" className="h-10 w-10" />
             <h1 className="mt-2 text-2xl font-bold">Sign in to ChunuMunu Ads</h1>
             <p className="mt-1 text-muted-foreground">Choose your sign-in method</p>

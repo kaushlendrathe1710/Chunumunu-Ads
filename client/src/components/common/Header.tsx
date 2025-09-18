@@ -60,7 +60,7 @@ export default function Header() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <div className="flex items-center p-2">
-                  <Avatar className="mr-2 h-8 w-8">
+                  <Avatar className="h-8 w-8">
                     <AvatarImage src={user?.avatar ?? undefined} alt={user?.username} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
                       {user?.username?.charAt(0).toUpperCase() || 'U'}

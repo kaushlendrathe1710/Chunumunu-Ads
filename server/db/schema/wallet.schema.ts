@@ -28,7 +28,7 @@ export const paymentMethodEnum = pgEnum('payment_method', [
 export const wallets = pgTable('wallets', {
   id: serial('id').primaryKey(),
   userId: integer('user_id')
-    .notNull()
+    .notNull().unique()
     .references(() => users.id, { onDelete: 'cascade' }),
   balance: decimal('balance', { precision: 10, scale: 2 }).notNull().default('0.00'),
   currency: text('currency').notNull().default('USD'),

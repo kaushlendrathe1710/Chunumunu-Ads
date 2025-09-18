@@ -15,6 +15,8 @@ import {
   MoreVertical,
   Trash2,
   Edit,
+  Upload,
+  X,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -49,6 +51,8 @@ export default function ManageTeams() {
   const [editTarget, setEditTarget] = useState<TeamWithUserRole | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editAvatarFile, setEditAvatarFile] = useState<File | null>(null);
+  const [editAvatarPreview, setEditAvatarPreview] = useState<string>('');
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -84,6 +88,8 @@ export default function ManageTeams() {
     setEditTarget(team);
     setEditName(team.name);
     setEditDescription(team.description || '');
+    setEditAvatarFile(null);
+    setEditAvatarPreview((team as any).avatar || '');
   };
 
   const updateMutation = useMutation({
@@ -93,16 +99,57 @@ export default function ManageTeams() {
       toast.success('Team updated');
       await queryClient.invalidateQueries({ queryKey: QK.teams() });
       setEditTarget(null);
+      setEditAvatarFile(null);
+      setEditAvatarPreview('');
     },
     onError: (e: any) => toast.error(e?.message || 'Failed to update team'),
   });
 
   const submitEdit = async () => {
     if (!editTarget) return;
-    updateMutation.mutate({
-      teamId: editTarget.id,
-      updates: { name: editName, description: editDescription },
-    });
+
+    if (editAvatarFile) {
+      // Use FormData if avatar file is selected
+      const formData = new FormData();
+      formData.append('name', editName);
+      formData.append('description', editDescription);
+      formData.append('avatar', editAvatarFile);
+
+      updateMutation.mutate({
+        teamId: editTarget.id,
+        updates: formData,
+      });
+    } else {
+      // Use regular object if no avatar file
+      updateMutation.mutate({
+        teamId: editTarget.id,
+        updates: { name: editName, description: editDescription },
+      });
+    }
+  };
+
+  const handleEditAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        // 5MB limit
+        toast.error('Avatar file size must be less than 5MB');
+        return;
+      }
+      setEditAvatarFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => setEditAvatarPreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeEditAvatar = () => {
+    setEditAvatarFile(null);
+    setEditAvatarPreview((editTarget as any)?.avatar || '');
   };
 
   const deleteMutation = useMutation({
@@ -119,6 +166,22 @@ export default function ManageTeams() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     deleteMutation.mutate(deleteTarget.id);
+  };
+
+  const leaveMutation = useMutation({
+    mutationFn: (teamId: number) => TeamAPI.leaveTeam(teamId),
+    onSuccess: async () => {
+      toast.success('Left team successfully');
+      await queryClient.invalidateQueries({ queryKey: QK.teams() });
+      await queryClient.invalidateQueries({ queryKey: QK.teamStats() });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to leave team'),
+  });
+
+  const handleLeaveTeam = (team: TeamWithUserRole) => {
+    if (confirm(`Are you sure you want to leave the team "${team.name}"?`)) {
+      leaveMutation.mutate(team.id);
+    }
   };
 
   if (loading) {
@@ -205,7 +268,7 @@ export default function ManageTeams() {
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-3">
                         <Avatar className="size-10">
-                          <AvatarImage src={(team as any).avatar || ''} alt={team.name} />
+                          <AvatarImage src={team.avatar || ''} alt={team.name} />
                           <AvatarFallback>{team.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -246,7 +309,12 @@ export default function ManageTeams() {
                             </>
                           )}
                           {team.userRole !== teamRole.owner && (
-                            <DropdownMenuItem className="text-red-600">Leave Team</DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="cursor-pointer text-red-600"
+                              onClick={() => handleLeaveTeam(team)}
+                            >
+                              Leave Team
+                            </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -325,6 +393,44 @@ export default function ManageTeams() {
             <DialogTitle>Edit Team</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="team-avatar">Team Avatar</Label>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={editAvatarPreview} alt="Team avatar preview" />
+                  <AvatarFallback className="text-lg">
+                    {editName ? editName.slice(0, 2).toUpperCase() : 'T'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEditAvatarChange}
+                    className="hidden"
+                    id="edit-avatar-input"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => document.getElementById('edit-avatar-input')?.click()}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload Avatar
+                    </Button>
+                    {editAvatarFile && (
+                      <Button type="button" variant="outline" size="sm" onClick={removeEditAvatar}>
+                        <X className="mr-2 h-4 w-4" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">PNG, JPG, or GIF. Max size 5MB.</p>
+                </div>
+              </div>
+            </div>
             <div>
               <Label htmlFor="team-name">Name</Label>
               <Input

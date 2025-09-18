@@ -10,14 +10,15 @@ import { AdVideoUploadForm } from './AdVideoUploadForm';
 import { AdBudgetForm } from './AdBudgetForm';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import CampaignAPI, { CampaignDto } from '@/api/campaignApi';
-import AdAPI from '@/api/adApi';
+import AdAPI, { AdDto } from '@/api/adApi';
 import { adSchema } from '@/utils/schemas';
 import { adStatus } from '@shared/constants';
-import { z } from 'zod';
 import { QK } from '@/api/queryKeys';
 
-interface CreateAdDialogProps {
+interface EditAdDialogProps {
   teamId: number;
+  campaignId: number;
+  ad: AdDto;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -45,7 +46,13 @@ interface AdFormData {
   status: string;
 }
 
-export const CreateAdDialog: React.FC<CreateAdDialogProps> = ({ teamId, onSuccess, onCancel }) => {
+export const EditAdDialog: React.FC<EditAdDialogProps> = ({
+  teamId,
+  campaignId,
+  ad,
+  onSuccess,
+  onCancel,
+}) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,21 +60,22 @@ export const CreateAdDialog: React.FC<CreateAdDialogProps> = ({ teamId, onSucces
   const [thumbnailFile, setThumbnailFile] = useState<UploadedFile | null>(null);
 
   const [formData, setFormData] = useState<AdFormData>({
-    title: '',
-    description: '',
-    categories: [],
-    tags: [],
-    ctaLink: '',
-    budget: 0,
-    campaignId: '',
-    status: adStatus.draft, // Default to draft
+    title: ad.title,
+    description: ad.description || '',
+    categories: ad.categories,
+    tags: ad.tags,
+    ctaLink: ad.ctaLink || '',
+    budget: parseFloat(ad.budget || '0'),
+    campaignId: ad.campaignId.toString(),
+    status: ad.status,
   });
+
+  const queryClient = useQueryClient();
 
   const campaignsQuery = useQuery<CampaignDto[]>({
     queryKey: QK.campaigns(teamId),
     queryFn: () => CampaignAPI.list(teamId) as Promise<CampaignDto[]>,
     enabled: !!teamId,
-    placeholderData: (prev) => prev, // keep old campaigns while refetching
   });
 
   // Fetch campaign budget info when campaign is selected
@@ -81,77 +89,74 @@ export const CreateAdDialog: React.FC<CreateAdDialogProps> = ({ teamId, onSucces
   useEffect(() => {
     if (campaignsQuery.data) {
       const mapped = campaignsQuery.data.map((c) => ({ id: c.id, name: c.name }));
-      // Only update if actually changed (shallow compare length + ids)
-      if (
-        mapped.length !== campaigns.length ||
-        mapped.some((m, i) => campaigns[i]?.id !== m.id || campaigns[i]?.name !== m.name)
-      ) {
-        setCampaigns(mapped);
-        // Auto-select if only one campaign and none chosen
-        if (mapped.length === 1 && !formData.campaignId) {
-          setFormData((f) => ({ ...f, campaignId: String(mapped[0].id) }));
-        }
-      }
+      setCampaigns(mapped);
     }
-  }, [campaignsQuery.data, campaigns.length, formData.campaignId]);
+  }, [campaignsQuery.data]);
+
+  const updateAdMutation = useMutation({
+    mutationFn: (payload: any) => AdAPI.update(teamId, campaignId, ad.id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QK.campaigns(teamId) });
+      queryClient.invalidateQueries({ queryKey: QK.ads(teamId) });
+      queryClient.invalidateQueries({ queryKey: ['campaignAds', teamId, campaignId] });
+      toast.success('Ad updated successfully!');
+      onSuccess();
+    },
+    onError: (error: any) => {
+      console.error('Update ad error:', error);
+      toast.error(error.response?.data?.error || 'Failed to update ad');
+    },
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
-    if (!videoFile || !thumbnailFile) {
-      toast.error('Upload video and thumbnail');
-      return;
-    }
+    // Use existing URLs if no new files uploaded
+    const finalVideoUrl = videoFile?.finalUrl || ad.videoUrl;
+    const finalThumbnailUrl = thumbnailFile?.finalUrl || ad.thumbnailUrl;
 
     const parseResult = adSchema.safeParse({
       ...formData,
-      videoUrl: videoFile?.finalUrl || '',
-      thumbnailUrl: thumbnailFile?.finalUrl || '',
+      videoUrl: finalVideoUrl,
+      thumbnailUrl: finalThumbnailUrl,
     });
+
     if (!parseResult.success) {
       toast.error(parseResult.error.errors[0].message);
       return;
     }
 
     setSubmitting(true);
-    const payload = {
-      title: formData.title,
-      description: formData.description,
-      categories: formData.categories,
-      tags: formData.tags,
-      ctaLink: formData.ctaLink,
-      videoUrl: videoFile.finalUrl,
-      thumbnailUrl: thumbnailFile.finalUrl,
-      budget: formData.budget,
-      campaignId: parseInt(formData.campaignId),
-      status: formData.status,
-    };
-    createMutation.mutate(payload as any);
+
+    try {
+      const updatePayload = {
+        title: formData.title,
+        description: formData.description,
+        categories: formData.categories,
+        tags: formData.tags,
+        ctaLink: formData.ctaLink,
+        videoUrl: finalVideoUrl,
+        thumbnailUrl: finalThumbnailUrl,
+        budget: formData.budget,
+        status: formData.status as any,
+      };
+
+      await updateAdMutation.mutateAsync(updatePayload);
+    } catch (error) {
+      console.error('Edit ad error:', error);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const queryClient = useQueryClient();
-  const createMutation = useMutation({
-    mutationFn: (payload: any) => AdAPI.create(teamId, payload.campaignId, payload),
-    onSuccess: () => {
-      toast.success('Ad created successfully');
-      queryClient.invalidateQueries({ queryKey: QK.ads(teamId) });
-      onSuccess();
-      setSubmitting(false);
-    },
-    onError: (e: any) => {
-      toast.error(e.message || 'Failed to create ad');
-      setSubmitting(false);
-    },
-  });
-
-  if (campaignsQuery.isLoading && !campaigns.length) {
-    return (
-      <div className="p-6 text-center">
-        <p className="text-gray-500">Loading...</p>
-      </div>
-    );
-  }
+  const statusOptions = [
+    { value: adStatus.draft, label: 'Draft' },
+    { value: adStatus.active, label: 'Active' },
+    { value: adStatus.paused, label: 'Paused' },
+    { value: adStatus.completed, label: 'Completed' },
+    { value: adStatus.under_review, label: 'Under Review' },
+    { value: adStatus.rejected, label: 'Rejected' },
+  ];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 p-1">
@@ -171,10 +176,13 @@ export const CreateAdDialog: React.FC<CreateAdDialogProps> = ({ teamId, onSucces
         onThumbnailUpload={setThumbnailFile}
         onVideoRemove={() => setVideoFile(null)}
         onThumbnailRemove={() => setThumbnailFile(null)}
-        uploadContext={formData.campaignId ? {
+        existingVideoUrl={ad.videoUrl}
+        existingThumbnailUrl={ad.thumbnailUrl}
+        uploadContext={{
           teamId: teamId,
-          campaignId: parseInt(formData.campaignId)
-        } : undefined}
+          campaignId: campaignId,
+          adId: ad.id,
+        }}
       />
 
       <AdBudgetForm
@@ -190,19 +198,19 @@ export const CreateAdDialog: React.FC<CreateAdDialogProps> = ({ teamId, onSucces
       <Card>
         <CardHeader>
           <CardTitle>Ad Status</CardTitle>
-          <CardDescription>Set the initial status for this ad</CardDescription>
+          <CardDescription>Set the current status of this ad</CardDescription>
         </CardHeader>
         <CardContent>
           <RadioGroup
             value={formData.status}
-            onValueChange={(value: string) => setFormData({ ...formData, status: value })}
-            className="space-y-2"
+            onValueChange={(value) => setFormData({ ...formData, status: value })}
+            className="grid grid-cols-2 gap-4"
           >
-            {Object.entries(adStatus).map(([key, value]) => (
-              <div key={value} className="flex items-center space-x-2">
-                <RadioGroupItem value={value} id={value} />
-                <Label htmlFor={value} className="capitalize">
-                  {key.replace('_', ' ')}
+            {statusOptions.map((option) => (
+              <div key={option.value} className="flex items-center space-x-2">
+                <RadioGroupItem value={option.value} id={option.value} />
+                <Label htmlFor={option.value} className="font-normal">
+                  {option.label}
                 </Label>
               </div>
             ))}
@@ -212,7 +220,7 @@ export const CreateAdDialog: React.FC<CreateAdDialogProps> = ({ teamId, onSucces
 
       <div className="flex gap-3 pt-4">
         <Button type="submit" className="flex-1" disabled={submitting}>
-          {submitting ? 'Creating...' : 'Create Ad'}
+          {submitting ? 'Updating...' : 'Update Ad'}
         </Button>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

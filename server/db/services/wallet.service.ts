@@ -126,7 +126,7 @@ export class WalletService {
     });
   }
 
-  static async getTransactionHistory(walletId: number, limit = 50, offset = 0) {
+  static async getTransactionHistory(walletId: number, limit = 20, offset = 0) {
     const transactionHistory = await db.query.transactions.findMany({
       where: eq(transactions.walletId, walletId),
       orderBy: [desc(transactions.createdAt)],

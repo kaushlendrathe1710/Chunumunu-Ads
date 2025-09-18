@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-export const campaignSchema = z.object({
+// Base schemas
+const baseCampaignSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(500, 'Description too long').optional().or(z.literal('')),
   budget: z
@@ -9,9 +10,10 @@ export const campaignSchema = z.object({
     .max(1_000_000, 'Budget too large'),
   startDate: z.date({ required_error: 'Start date required' }),
   endDate: z.date({ required_error: 'End date required' }),
+  status: z.enum(['draft', 'active', 'paused', 'completed']).default('draft'),
 });
 
-export const adSchema = z.object({
+const baseAdSchema = z.object({
   title: z.string().min(1, 'Title required').max(100),
   description: z.string().max(500).optional().or(z.literal('')),
   categories: z.array(z.string()).min(1, 'Select at least one category'),
@@ -27,6 +29,10 @@ export const adSchema = z.object({
   videoUrl: z.string().url('Video URL required'),
   thumbnailUrl: z.string().url('Thumbnail URL required'),
 });
+
+// Export specific schemas using Zod's built-in methods
+export const campaignSchema = baseCampaignSchema;
+export const adSchema = baseAdSchema;
 
 export type CampaignFormValues = z.infer<typeof campaignSchema>;
 export type AdFormValues = z.infer<typeof adSchema>;
