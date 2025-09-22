@@ -171,10 +171,14 @@ export const CreateAdDialog: React.FC<CreateAdDialogProps> = ({ teamId, onSucces
         onThumbnailUpload={setThumbnailFile}
         onVideoRemove={() => setVideoFile(null)}
         onThumbnailRemove={() => setThumbnailFile(null)}
-        uploadContext={formData.campaignId ? {
-          teamId: teamId,
-          campaignId: parseInt(formData.campaignId)
-        } : undefined}
+        uploadContext={
+          formData.campaignId
+            ? {
+                teamId: teamId,
+                campaignId: parseInt(formData.campaignId),
+              }
+            : undefined
+        }
       />
 
       <AdBudgetForm

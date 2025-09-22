@@ -124,9 +124,7 @@ export default function VerifyOtp() {
           <div className="mb-6 flex flex-col items-center text-center">
             <img src={logo} alt="Logo" className="h-10 w-10" />
             <h1 className="mt-2 text-2xl font-bold">Verify your email</h1>
-            <p className="mt-1 text-muted-foreground">
-              We've sent a 6-digit code to {email}
-            </p>
+            <p className="mt-1 text-muted-foreground">We've sent a 6-digit code to {email}</p>
           </div>
 
           <form onSubmit={handleVerify} className="space-y-4">

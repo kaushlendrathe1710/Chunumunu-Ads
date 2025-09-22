@@ -71,6 +71,7 @@ export function EditCampaignDialog({
         budget: parseFloat(campaign.budget || '0'),
         startDate: campaign.startDate ? new Date(campaign.startDate) : undefined,
         endDate: campaign.endDate ? new Date(campaign.endDate) : undefined,
+        status: campaign.status || campaignStatus.draft,
       });
     }
 
@@ -84,6 +85,13 @@ export function EditCampaignDialog({
       });
     };
   }, [campaign]);
+
+  const statusOptions = [
+    { value: campaignStatus.draft, label: 'Draft' },
+    { value: campaignStatus.active, label: 'Active' },
+    { value: campaignStatus.paused, label: 'Paused' },
+    { value: campaignStatus.completed, label: 'Completed' },
+  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +129,7 @@ export function EditCampaignDialog({
         budget: formData.budget,
         startDate: formData.startDate?.toISOString(),
         endDate: formData.endDate?.toISOString(),
+        status: formData.status,
       };
 
       await CampaignAPI.update(teamId, campaign.id, payload);
@@ -245,6 +254,25 @@ export function EditCampaignDialog({
               onDateChange={(date) => setFormData({ ...formData, endDate: date })}
               placeholder="Select end date"
             />
+          </div>
+
+          {/* Campaign Status */}
+          <div>
+            <label className="mb-2 block text-sm font-medium">Campaign Status</label>
+            <RadioGroup
+              value={formData.status}
+              onValueChange={(value) => setFormData({ ...formData, status: value })}
+              className="grid grid-cols-2 gap-4"
+            >
+              {statusOptions.map((option) => (
+                <div key={option.value} className="flex items-center space-x-2">
+                  <RadioGroupItem value={option.value} id={option.value} />
+                  <Label htmlFor={option.value} className="font-normal">
+                    {option.label}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
           </div>
 
           <div className="flex gap-3 pt-4">

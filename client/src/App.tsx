@@ -11,7 +11,6 @@ import { ToastContainer } from 'react-toastify';
 import React, { Suspense } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
-
 import Auth from './pages/Auth';
 import VerifyOtp from './pages/VerifyOtp';
 import NotFound from './pages/NotFound';
@@ -27,7 +26,6 @@ import Profile from './pages/Profile';
 
 import ProtectedRoute from './components/common/ProtectedRoute';
 import { useTheme } from './hooks/useTheme';
-
 
 function Wrapper() {
   const { currentTheme } = useTheme();

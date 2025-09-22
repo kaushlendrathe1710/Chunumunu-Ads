@@ -8,9 +8,7 @@ export function registerUserRoutes(app: Express): void {
   app.put(
     '/api/users/profile',
     authenticate,
-    profileImageUpload.fields([
-      { name: 'avatar', maxCount: 1 },
-    ]),
+    profileImageUpload.fields([{ name: 'avatar', maxCount: 1 }]),
     UserController.updateUserProfile
   );
   app.get('/api/users/:id/profile', UserController.getUserProfile);

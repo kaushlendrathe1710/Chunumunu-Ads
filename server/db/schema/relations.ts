@@ -48,6 +48,7 @@ export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
     references: [users.id],
   }),
   ads: many(ads),
+  impressions: many(adImpressions),
 }));
 
 // Ad relations
@@ -85,6 +86,10 @@ export const adImpressionsRelations = relations(adImpressions, ({ one }) => ({
   ad: one(ads, {
     fields: [adImpressions.adId],
     references: [ads.id],
+  }),
+  campaign: one(campaigns, {
+    fields: [adImpressions.campaignId],
+    references: [campaigns.id],
   }),
   // Note: no user relation since ads run on external platforms
 }));

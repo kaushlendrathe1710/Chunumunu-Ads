@@ -27,7 +27,7 @@ export default function Auth() {
   if (isLoading || isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-16 w-16 animate-spin rounded-full border-4 border-border border-t-primary "></div>
+        <div className="h-16 w-16 animate-spin rounded-full border-4 border-border border-t-primary"></div>
       </div>
     );
   }
@@ -50,7 +50,7 @@ export default function Auth() {
                 <span className="w-full border-t border-gray-300 dark:border-gray-600" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-gray-500  dark:text-gray-400">
+                <span className="bg-card px-2 text-gray-500 dark:text-gray-400">
                   Or continue with email
                 </span>
               </div>

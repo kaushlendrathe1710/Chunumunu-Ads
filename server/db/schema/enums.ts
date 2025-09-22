@@ -31,6 +31,15 @@ export const impressionActionEnum = pgEnum('impression_action', [
   'unmute',
 ]);
 
+// Impression status enum for tracking impression lifecycle
+export const impressionStatusEnum = pgEnum('impression_status', [
+  'reserved', // Ad is reserved for serving
+  'served', // Ad has been served to viewer
+  'confirmed', // Impression confirmed by viewer interaction
+  'expired', // Token expired without confirmation
+  'cancelled', // Impression was cancelled
+]);
+
 // Device type enum for analytics
 export const deviceTypeEnum = pgEnum('device_type', [
   'desktop',

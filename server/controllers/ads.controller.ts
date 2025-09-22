@@ -1,11 +1,13 @@
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { z } from 'zod';
 import { AdsService } from '../db/services/ads.service';
 import { CampaignService } from '../db/services/campaign.service';
+import { AdSelectorService } from '../db/services/adSelector.service';
 import { AuthenticatedRequest } from '../types';
 import { permission, adBudget } from '@shared/constants';
 import { insertAdSchema, updateAdSchema } from '@shared/types';
 import { deleteFileFromS3 } from '../config/s3';
+import { serveAdRequestSchema } from '../schemas/adSchemas';
 
 export class AdsController {
   /**
@@ -347,6 +349,46 @@ export class AdsController {
     } catch (error) {
       console.error('Get ad budget info error:', error);
       res.status(500).json({ error: 'Failed to fetch budget information' });
+    }
+  }
+
+  /**
+   * Serve an ad based on content context and user targeting
+   * This is a public endpoint that doesn't require authentication
+   */
+  static async serveAd(req: Request, res: Response) {
+    try {
+      // Validate the request body
+      const validation = serveAdRequestSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: validation.error.errors,
+        });
+      }
+
+      const requestData = validation.data;
+
+      // Extract user agent and IP address for impression tracking
+      const userAgent = req.get('User-Agent');
+      const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+
+      // Serve the ad using the ad selector service
+      const result = await AdSelectorService.serveAd(requestData, userAgent, ipAddress);
+
+      if ('reason' in result) {
+        // No eligible ads found
+        return res.status(204).json(result);
+      }
+
+      // Return the ad and impression details
+      res.json(result);
+    } catch (error) {
+      console.error('Serve ad error:', error);
+      res.status(500).json({
+        error: 'Failed to serve ad',
+        reason: 'internal_error',
+      });
     }
   }
 }

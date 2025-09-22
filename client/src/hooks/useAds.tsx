@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import AdAPI, { 
-  AdDto, 
-  CreateAdPayload, 
-  UpdateAdPayload, 
+import AdAPI, {
+  AdDto,
+  CreateAdPayload,
+  UpdateAdPayload,
   AdBudgetInfo,
-  DeleteAdResponse 
+  DeleteAdResponse,
 } from '../api/adApi';
 import { QK } from '../api/queryKeys';
 
@@ -52,16 +52,16 @@ export function useCreateAd(teamId: number, campaignId: number) {
       // Invalidate and refetch related queries
       queryClient.invalidateQueries({ queryKey: QK.campaignAds(teamId, campaignId) });
       queryClient.invalidateQueries({ queryKey: QK.ads(teamId) });
-      
+
       // Optionally set the new ad in cache
       queryClient.setQueryData(QK.ad(teamId, campaignId, newAd.id), newAd);
-      
+
       toast.success('Ad created successfully');
     },
     onError: (error: any) => {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to create ad';
       toast.error(errorMessage);
-      
+
       // If it's a budget error, provide more specific feedback
       if (error.response?.data?.budgetInfo) {
         const budgetInfo = error.response.data.budgetInfo;
@@ -81,17 +81,17 @@ export function useUpdateAd(teamId: number, campaignId: number, adId: number) {
     onSuccess: (updatedAd) => {
       // Update specific ad in cache
       queryClient.setQueryData(QK.ad(teamId, campaignId, adId), updatedAd);
-      
+
       // Invalidate lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: QK.campaignAds(teamId, campaignId) });
       queryClient.invalidateQueries({ queryKey: QK.ads(teamId) });
-      
+
       toast.success('Ad updated successfully');
     },
     onError: (error: any) => {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to update ad';
       toast.error(errorMessage);
-      
+
       // If it's a budget error, provide more specific feedback
       if (error.response?.data?.budgetInfo) {
         const budgetInfo = error.response.data.budgetInfo;
@@ -111,16 +111,17 @@ export function useDeleteAd(teamId: number, campaignId: number) {
     onSuccess: (result: DeleteAdResponse, adId) => {
       // Remove ad from cache
       queryClient.removeQueries({ queryKey: QK.ad(teamId, campaignId, adId) });
-      
+
       // Invalidate lists to refetch updated data
       queryClient.invalidateQueries({ queryKey: QK.campaignAds(teamId, campaignId) });
       queryClient.invalidateQueries({ queryKey: QK.ads(teamId) });
-      
+
       // Show success message with refund info if applicable
-      const message = result.refundAmount > 0 
-        ? `Ad deleted successfully. ${result.refundAmount} refunded.`
-        : 'Ad deleted successfully';
-      
+      const message =
+        result.refundAmount > 0
+          ? `Ad deleted successfully. ${result.refundAmount} refunded.`
+          : 'Ad deleted successfully';
+
       toast.success(message);
     },
     onError: (error: any) => {
@@ -145,7 +146,9 @@ export function useAdPermissions() {
 // Hook to validate ad budget before creation
 export function useAdBudgetValidation(teamId: number, campaignId: number) {
   return {
-    validateBudget: async (requestedBudget?: number): Promise<{ isValid: boolean; error?: string }> => {
+    validateBudget: async (
+      requestedBudget?: number
+    ): Promise<{ isValid: boolean; error?: string }> => {
       try {
         await AdAPI.getBudgetInfo(teamId, campaignId, requestedBudget);
         return { isValid: true };

@@ -15,12 +15,47 @@ export function createApp() {
   app.set('trust proxy', true);
 
   // Setup CORS to allow cross-domain cookies in production
+  const allowedOrigins = [
+    process.env.LOCAL_CLIENT_URL!,
+    process.env.PRODUCTION_CLIENT_URL!,
+    'http://localhost:5000', // for local testing with tools like Postman
+  ];
+
   app.use(
     cors({
-      origin: true, // Reflect the request origin
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        return allowedOrigins.includes(origin)
+          ? callback(null, true)
+          : callback(new Error('CORS policy violation'));
+      },
       credentials: true, // Allow cookies to be sent with requests
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'Priority',
+        'X-Requested-With',
+        'Accept',
+        'Origin',
+      ],
+    })
+  );
+
+  app.options(
+    '*',
+    cors({
+      origin: allowedOrigins,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'Priority',
+        'X-Requested-With',
+        'Accept',
+        'Origin',
+      ],
     })
   );
 
@@ -72,7 +107,8 @@ export function createApp() {
       cookie: {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days for longer persistence
         secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        // sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        sameSite: 'none',
         path: '/',
         httpOnly: true, // Adds security by preventing client-side access to the cookie
       },

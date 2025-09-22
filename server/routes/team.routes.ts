@@ -51,8 +51,4 @@ export function registerTeamRoutes(app: Express): void {
 
   // Permission check route
   app.get('/api/teams/:teamId/permissions/:userId', authenticate, TeamController.checkPermission);
-
-  // Campaign and ads routes
-  app.use('/api', campaignRoutes);
-  app.use('/api', adsRoutes);
 }

@@ -41,6 +41,7 @@ const createTransporter = () => {
 export async function sendOtpEmail(email: string, otp: string): Promise<void> {
   try {
     // If we're in development, log the OTP for easy testing
+    console.log('node env:', process.env.NODE_ENV);
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[DEV MODE] The OTP for ${email} is: ${otp}`);
     }

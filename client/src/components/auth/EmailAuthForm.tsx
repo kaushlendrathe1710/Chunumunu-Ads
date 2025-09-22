@@ -47,11 +47,7 @@ export default function EmailAuthForm() {
           required
         />
       </div>
-      <Button
-        type="submit"
-        className='w-full'
-        disabled={isLoading || !email}
-      >
+      <Button type="submit" className="w-full" disabled={isLoading || !email}>
         {isLoading ? 'Sending...' : 'Continue'}
       </Button>
     </form>
