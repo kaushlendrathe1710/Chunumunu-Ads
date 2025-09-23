@@ -23,11 +23,18 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: (origin, callback) => {
+      origin(origin, callback) {
+        // allow requests with no origin (e.g. curl, mobile SDKs, same-origin navigations)
         if (!origin) return callback(null, true);
-        return allowedOrigins.includes(origin)
-          ? callback(null, true)
-          : callback(new Error('CORS policy violation'));
+
+        // exact-match check (include protocol + port)
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+
+        // deny but do not throw synchronously
+        // callback with false will result in no CORS headers set
+        return callback(null, false);
       },
       credentials: true, // Allow cookies to be sent with requests
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

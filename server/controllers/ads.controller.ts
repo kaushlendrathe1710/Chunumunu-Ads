@@ -8,6 +8,7 @@ import { permission, adBudget } from '@shared/constants';
 import { insertAdSchema, updateAdSchema } from '@shared/types';
 import { deleteFileFromS3 } from '../config/s3';
 import { serveAdRequestSchema } from '../schemas/adSchemas';
+import { getClientIp, parseUserAgent } from '../utils/clientInfo';
 
 export class AdsController {
   /**
@@ -355,6 +356,12 @@ export class AdsController {
   /**
    * Serve an ad based on content context and user targeting
    * This is a public endpoint that doesn't require authentication
+   * 
+   * Request body should include:
+   * - For authenticated users: user_id (and optionally anon_id for session continuity)
+   * - For anonymous users: anon_id
+   * - videoId, category, tags (required)
+   * - sessionId (optional)
    */
   static async serveAd(req: Request, res: Response) {
     try {
@@ -370,11 +377,19 @@ export class AdsController {
       const requestData = validation.data;
 
       // Extract user agent and IP address for impression tracking
-      const userAgent = req.get('User-Agent');
-      const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+      const userAgent = req.get('User-Agent') || '';
+      const ipAddress = getClientIp(req);
+
+      // Parse user agent for device information
+      const { os, deviceType } = parseUserAgent(userAgent);
 
       // Serve the ad using the ad selector service
-      const result = await AdSelectorService.serveAd(requestData, userAgent, ipAddress);
+      const result = await AdSelectorService.serveAd(
+        requestData, 
+        userAgent, 
+        ipAddress,
+        { os, deviceType }
+      );
 
       if ('reason' in result) {
         // No eligible ads found

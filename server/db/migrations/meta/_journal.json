@@ -22,6 +22,20 @@
       "when": 1758281871921,
       "tag": "0002_steady_unicorn",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1758542442284,
+      "tag": "0003_ambiguous_madelyne_pryor",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1758543429034,
+      "tag": "0004_even_lady_mastermind",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "ad_impressions" ADD COLUMN "anon_id" text;

@@ -5,9 +5,16 @@ export const serveAdRequestSchema = z.object({
   videoId: z.string().min(1, 'Video ID is required'),
   category: z.string().min(1, 'Category is required'),
   tags: z.array(z.string()).min(1, 'At least one tag is required'),
-  viewerId: z.string().optional(),
+  user_id: z.string().optional(), // Authenticated user ID
+  anon_id: z.string().optional(), // Anonymous user ID
   sessionId: z.string().optional(),
-});
+}).refine(
+  (data) => data.user_id || data.anon_id,
+  {
+    message: "Either user_id (for authenticated users) or anon_id (for anonymous users) must be provided",
+    path: ["user_id", "anon_id"],
+  }
+);
 
 export type ServeAdRequest = z.infer<typeof serveAdRequestSchema>;
 
@@ -43,6 +50,9 @@ export type NoAdsResponse = z.infer<typeof noAdsResponseSchema>;
 export const confirmImpressionRequestSchema = z.object({
   token: z.string().min(1, 'Impression token is required'),
   event: z.enum(['served', 'clicked', 'completed', 'skipped']),
+  // Optional user identification (for additional tracking)
+  user_id: z.string().optional(), // If user is authenticated
+  anon_id: z.string().optional(), // If user is anonymous
   metadata: z
     .object({
       userAgent: z.string().optional(),

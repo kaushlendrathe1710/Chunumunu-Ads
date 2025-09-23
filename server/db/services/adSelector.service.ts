@@ -258,7 +258,8 @@ export class AdSelectorService {
     token: string;
     adId: number;
     campaignId: number;
-    viewerId?: string;
+    userId?: string;
+    anonId?: string;
     sessionId?: string;
     videoId: string;
     category: string;
@@ -267,6 +268,7 @@ export class AdSelectorService {
     expiresAt: Date;
     userAgent?: string;
     ipAddress?: string;
+    deviceInfo?: { os: string; deviceType: string };
   }) {
     return await db.transaction(async (tx) => {
       // Double-check ad eligibility within transaction
@@ -322,7 +324,8 @@ export class AdSelectorService {
           token: data.token,
           adId: data.adId,
           campaignId: data.campaignId,
-          viewerId: data.viewerId,
+          viewerId: data.userId, // Store authenticated user ID in viewerId
+          anonId: data.anonId, // Store anonymous ID in anonId
           sessionId: data.sessionId,
           videoId: data.videoId,
           category: data.category,
@@ -331,8 +334,11 @@ export class AdSelectorService {
           expiresAt: data.expiresAt,
           userAgent: data.userAgent,
           ipAddress: data.ipAddress,
-          status: 'reserved',
+          osType: (data.deviceInfo?.os as any) || 'unknown',
+          deviceType: (data.deviceInfo?.deviceType as any) || 'unknown',
+          status: 'reserved', // Initial status when ad is served
           action: 'view', // Default action for served impressions
+          servedAt: new Date(), // Mark when the ad was served
         })
         .returning();
 
@@ -354,48 +360,13 @@ export class AdSelectorService {
   }
 
   /**
-   * Update impression status
-   */
-  static async updateImpressionStatus(
-    token: string,
-    status: 'served' | 'confirmed' | 'expired' | 'cancelled',
-    metadata?: {
-      userAgent?: string;
-      ipAddress?: string;
-    }
-  ) {
-    const updateData: any = {
-      status,
-      updatedAt: new Date(),
-    };
-
-    if (status === 'served') {
-      updateData.servedAt = new Date();
-    } else if (status === 'confirmed') {
-      updateData.confirmedAt = new Date();
-    }
-
-    if (metadata?.userAgent) {
-      updateData.userAgent = metadata.userAgent;
-    }
-    if (metadata?.ipAddress) {
-      updateData.ipAddress = metadata.ipAddress;
-    }
-
-    return await db
-      .update(adImpressions)
-      .set(updateData)
-      .where(eq(adImpressions.token, token))
-      .returning();
-  }
-
-  /**
    * Main function to serve an ad based on the request
    */
   static async serveAd(
     request: ServeAdRequest,
     userAgent?: string,
-    ipAddress?: string
+    ipAddress?: string,
+    deviceInfo?: { os: string; deviceType: string }
   ): Promise<ServeAdResponse | { reason: 'no_eligible_ads' }> {
     try {
       // 1. Fetch candidate ads
@@ -435,7 +406,8 @@ export class AdSelectorService {
         token,
         adId: selectedAd.id,
         campaignId: selectedAd.campaignId,
-        viewerId: request.viewerId,
+        userId: request.user_id, // Authenticated user ID
+        anonId: request.anon_id, // Anonymous user ID
         sessionId: request.sessionId,
         videoId: request.videoId,
         category: request.category,
@@ -444,6 +416,7 @@ export class AdSelectorService {
         expiresAt,
         userAgent,
         ipAddress,
+        deviceInfo,
       });
 
       // 7. Generate final token with actual impression ID
@@ -479,6 +452,8 @@ export class AdSelectorService {
 
   /**
    * Confirm an impression and handle billing
+   * Handles all event types: served, clicked, completed, skipped
+   * Only 'served' events trigger billing, others are just tracked
    */
   static async confirmImpression(
     token: string,
@@ -488,6 +463,10 @@ export class AdSelectorService {
       ipAddress?: string;
       viewDuration?: number;
       videoProgress?: number;
+      os?: string;
+      deviceType?: string;
+      user_id?: string; // Optional user identification
+      anon_id?: string; // Optional anonymous identification
     }
   ) {
     const impression = await this.getImpressionByToken(token);
@@ -495,11 +474,7 @@ export class AdSelectorService {
       throw new Error('Impression not found');
     }
 
-    // Check if impression has already been confirmed or expired
-    if (impression.status === 'confirmed') {
-      throw new Error('Impression already confirmed');
-    }
-
+    // Check if impression has expired
     if (
       impression.status === 'expired' ||
       (impression.expiresAt && impression.expiresAt < new Date())
@@ -507,78 +482,203 @@ export class AdSelectorService {
       throw new Error('Impression has expired');
     }
 
-    // Only process billing for 'served' events
+    // Validate event transitions
+    const currentStatus = impression.status || 'pending';
+    if (!this.isValidEventTransition(currentStatus, event)) {
+      throw new Error(`Invalid event transition from ${currentStatus} to ${event}`);
+    }
+
+    // Process the impression event
     if (event === 'served') {
-      await db.transaction(async (tx) => {
-        // Get ad and campaign for budget deduction
-        const [adData] = await tx
-          .select({
-            adId: ads.id,
-            adBudget: ads.budget,
-            adSpent: ads.spent,
-            campaignId: campaigns.id,
-            campaignBudget: campaigns.budget,
-            campaignSpent: campaigns.spent,
-            teamId: campaigns.teamId,
-          })
-          .from(ads)
-          .innerJoin(campaigns, eq(ads.campaignId, campaigns.id))
-          .where(eq(ads.id, impression.adId))
-          .for('update'); // Lock for concurrent safety
-
-        if (!adData) {
-          throw new Error('Ad or campaign not found');
-        }
-
-        const costDollars = (impression.costCents || 0) / 100;
-
-        // Determine which budget to deduct from
-        let updateAdSpent = false;
-        let updateCampaignSpent = true;
-
-        if (adData.adBudget && adData.adBudget !== '-1') {
-          // Ad has its own budget, deduct from ad budget
-          updateAdSpent = true;
-          updateCampaignSpent = false;
-        }
-
-        // Update ad spent if using ad-specific budget
-        if (updateAdSpent) {
-          await tx
-            .update(ads)
-            .set({
-              spent: sql`${ads.spent} + ${costDollars}`,
-              updatedAt: new Date(),
-            })
-            .where(eq(ads.id, impression.adId));
-        }
-
-        // Update campaign spent
-        if (updateCampaignSpent) {
-          await tx
-            .update(campaigns)
-            .set({
-              spent: sql`${campaigns.spent} + ${costDollars}`,
-              updatedAt: new Date(),
-            })
-            .where(eq(campaigns.id, impression.campaignId));
-        }
-
-        // Update impression status
-        await this.updateImpressionStatus(token, 'confirmed', {
-          userAgent: metadata?.userAgent,
-          ipAddress: metadata?.ipAddress,
-        });
-      });
+      // Only 'served' events trigger billing
+      await this.processBillingForServedImpression(impression, metadata);
     } else {
-      // For non-billing events, just update the impression status
-      await this.updateImpressionStatus(token, 'confirmed', {
-        userAgent: metadata?.userAgent,
-        ipAddress: metadata?.ipAddress,
-      });
+      // For other events (clicked, completed, skipped), just update tracking
+      await this.updateImpressionEvent(impression, event, metadata);
     }
 
     return impression;
+  }
+
+  /**
+   * Process billing for served impression with proper budget management
+   */
+  private static async processBillingForServedImpression(
+    impression: any,
+    metadata?: {
+      userAgent?: string;
+      ipAddress?: string;
+      viewDuration?: number;
+      videoProgress?: number;
+      os?: string;
+      deviceType?: string;
+      user_id?: string;
+      anon_id?: string;
+    }
+  ) {
+    await db.transaction(async (tx) => {
+      // Get ad and campaign for budget deduction
+      const [adData] = await tx
+        .select({
+          adId: ads.id,
+          adBudget: ads.budget,
+          adSpent: ads.spent,
+          campaignId: campaigns.id,
+          campaignBudget: campaigns.budget,
+          campaignSpent: campaigns.spent,
+          teamId: campaigns.teamId,
+        })
+        .from(ads)
+        .innerJoin(campaigns, eq(ads.campaignId, campaigns.id))
+        .where(eq(ads.id, impression.adId))
+        .for('update'); // Lock for concurrent safety
+
+      if (!adData) {
+        throw new Error('Ad or campaign not found');
+      }
+
+      const costDollars = (impression.costCents || 0) / 100;
+
+      // Determine budget source based on ad budget setting
+      // If ad budget is -1 or null/undefined, use campaign budget
+      // Otherwise, use ad-specific budget
+      const useAdBudget = adData.adBudget && adData.adBudget !== '-1' && adData.adBudget !== '0';
+      
+      if (useAdBudget) {
+        // Deduct from ad-specific budget
+        const currentAdSpent = parseFloat(adData.adSpent || '0');
+        const adBudgetLimit = parseFloat(adData.adBudget || '0');
+        
+        // Check if ad budget would be exceeded
+        if (currentAdSpent + costDollars > adBudgetLimit) {
+          throw new Error('Ad budget would be exceeded');
+        }
+        
+        await tx
+          .update(ads)
+          .set({
+            spent: sql`${ads.spent} + ${costDollars}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(ads.id, impression.adId));
+      } else {
+        // Deduct from campaign budget
+        const currentCampaignSpent = parseFloat(adData.campaignSpent || '0');
+        const campaignBudgetLimit = parseFloat(adData.campaignBudget || '0');
+        
+        // Check if campaign budget would be exceeded
+        if (campaignBudgetLimit > 0 && currentCampaignSpent + costDollars > campaignBudgetLimit) {
+          throw new Error('Campaign budget would be exceeded');
+        }
+        
+        await tx
+          .update(campaigns)
+          .set({
+            spent: sql`${campaigns.spent} + ${costDollars}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(campaigns.id, impression.campaignId));
+      }
+
+      // Update impression status to 'served' with metadata
+      // If user identification is provided, update the impression record
+      const updateData: any = {
+        status: 'served',
+        action: 'view',
+        userAgent: metadata?.userAgent,
+        ipAddress: metadata?.ipAddress,
+        osType: (metadata?.os as any) || null,
+        deviceType: (metadata?.deviceType as any) || null,
+        viewDuration: metadata?.viewDuration,
+        videoProgress: metadata?.videoProgress?.toString(),
+        confirmedAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Update user identification if provided (for user session bridging)
+      if (metadata?.user_id) {
+        updateData.viewerId = metadata.user_id;
+        updateData.anonId = null; // Clear anon_id if user becomes authenticated
+      } else if (metadata?.anon_id && !impression.viewerId) {
+        // Only update anon_id if no authenticated user is already associated
+        updateData.anonId = metadata.anon_id;
+      }
+
+      await tx
+        .update(adImpressions)
+        .set(updateData)
+        .where(eq(adImpressions.token, impression.token));
+    });
+  }
+
+  /**
+   * Update impression for non-billing events (clicked, completed, skipped)
+   */
+  private static async updateImpressionEvent(
+    impression: any,
+    event: 'clicked' | 'completed' | 'skipped',
+    metadata?: {
+      userAgent?: string;
+      ipAddress?: string;
+      viewDuration?: number;
+      videoProgress?: number;
+      os?: string;
+      deviceType?: string;
+      user_id?: string;
+      anon_id?: string;
+    }
+  ) {
+    const actionMap = {
+      clicked: 'click',
+      completed: 'complete',
+      skipped: 'skip',
+    };
+
+    const updateData: any = {
+      status: 'confirmed',
+      action: actionMap[event] as any,
+      userAgent: metadata?.userAgent,
+      ipAddress: metadata?.ipAddress,
+      osType: (metadata?.os as any) || null,
+      deviceType: (metadata?.deviceType as any) || null,
+      viewDuration: metadata?.viewDuration,
+      videoProgress: metadata?.videoProgress?.toString(),
+      confirmedAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // Update user identification if provided (for user session bridging)
+    if (metadata?.user_id) {
+      updateData.viewerId = metadata.user_id;
+      updateData.anonId = null; // Clear anon_id if user becomes authenticated
+    } else if (metadata?.anon_id && !impression.viewerId) {
+      // Only update anon_id if no authenticated user is already associated
+      updateData.anonId = metadata.anon_id;
+    }
+
+    await db
+      .update(adImpressions)
+      .set(updateData)
+      .where(eq(adImpressions.token, impression.token));
+  }
+
+  /**
+   * Check if event transition is valid
+   */
+  private static isValidEventTransition(currentStatus: string, event: string): boolean {
+    switch (currentStatus) {
+      case 'reserved':
+        return event === 'served';
+      case 'served':
+        return ['clicked', 'completed', 'skipped'].includes(event);
+      case 'confirmed':
+        return false; // No further transitions allowed
+      case 'expired':
+      case 'cancelled':
+        return false; // No transitions from terminal states
+      default:
+        return event === 'served'; // Default case
+    }
   }
 
   /**
