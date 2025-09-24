@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient } from './apiClient';
 
 export interface WalletDto {
   id: number;
@@ -28,7 +28,7 @@ export interface AddFundsPayload {
 }
 
 export async function fetchWallet() {
-  const { data } = await axios.get<{ wallet: WalletDto }>('/api/wallet', { withCredentials: true });
+  const { data } = await apiClient.get<{ wallet: WalletDto }>('/wallet');
   return data.wallet;
 }
 
@@ -38,9 +38,8 @@ export interface TransactionsPage {
 }
 
 export async function fetchWalletTransactions(page = 1, limit = 10): Promise<TransactionsPage> {
-  const { data } = await axios.get<TransactionsPage>(
-    `/api/wallet/transactions?page=${page}&limit=${limit}`,
-    { withCredentials: true }
+  const { data } = await apiClient.get<TransactionsPage>(
+    `/wallet/transactions?page=${page}&limit=${limit}`
   );
   return {
     transactions: data.transactions || [],
@@ -49,9 +48,6 @@ export async function fetchWalletTransactions(page = 1, limit = 10): Promise<Tra
 }
 
 export async function addFunds(payload: AddFundsPayload) {
-  const { data } = await axios.post('/api/wallet/add-funds', payload, {
-    withCredentials: true,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  const { data } = await apiClient.post('/wallet/add-funds', payload);
   return data;
 }

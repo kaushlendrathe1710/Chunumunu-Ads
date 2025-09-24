@@ -3,7 +3,7 @@ import { createServer, type Server } from 'http';
 import { registerAuthRoutes } from './auth.routes.js';
 import { registerUserRoutes } from './user.routes.js';
 import { registerTeamRoutes } from './team.routes.js';
-import walletRoutes from './wallet.routes.js';
+import walletRoutes from './wallet.routes';
 import uploadRoutes from './upload.routes.js';
 import impressionRoutes from './impression.routes.js';
 import campaignRoutes from './campaign.routes.js';

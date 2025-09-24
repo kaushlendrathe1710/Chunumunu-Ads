@@ -16,9 +16,9 @@ export function createApp() {
 
   // Setup CORS to allow cross-domain cookies in production
   const allowedOrigins = [
-    process.env.LOCAL_CLIENT_URL!,
-    process.env.PRODUCTION_CLIENT_URL!,
-    'http://localhost:5000', // for local testing with tools like Postman
+    process.env.VITE_CLIENT_URL!,
+    process.env.VITE_AUTH_SERVER!,
+    process.env.VITE_VIDEOSTREAMPRO_URL!
   ];
 
   app.use(

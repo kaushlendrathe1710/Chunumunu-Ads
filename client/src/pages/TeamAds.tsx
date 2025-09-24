@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTeam } from '@/hooks/useTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,9 +52,6 @@ export default function TeamAds() {
     queryFn: () => (currentTeam ? CampaignAPI.list(currentTeam.id) : Promise.resolve([])),
     enabled: !!currentTeam,
   });
-  if (campaignsQuery.data && campaigns.length === 0) {
-    setCampaigns((campaignsQuery.data as any[]).map((c: any) => ({ id: c.id, name: c.name })));
-  }
 
   const adsQuery = useQuery<AdDto[]>({
     queryKey: currentTeam ? QK.ads(currentTeam.id, selectedCampaign) : ['ads', 'noop'],
@@ -65,9 +62,20 @@ export default function TeamAds() {
     },
     enabled: !!currentTeam,
   });
-  if (adsQuery.data && adsQuery.data !== ads) {
-    setAds(adsQuery.data as any);
-  }
+
+  // Update campaigns when data is available
+  useEffect(() => {
+    if (campaignsQuery.data && campaigns.length === 0) {
+      setCampaigns((campaignsQuery.data as any[]).map((c: any) => ({ id: c.id, name: c.name })));
+    }
+  }, [campaignsQuery.data, campaigns.length]);
+
+  // Update ads when data is available
+  useEffect(() => {
+    if (adsQuery.data && adsQuery.data !== ads) {
+      setAds(adsQuery.data as any);
+    }
+  }, [adsQuery.data, ads]);
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ ad, status }: { ad: Ad; status: string }) =>

@@ -1,196 +1,239 @@
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSeparator,
-  InputOTPSlot,
-} from '@/components/ui/input-otp';
 import { useState, useEffect } from 'react';
-import { useRedirectAuthenticated } from '@/hooks/useAuth';
-import { useAuth } from '@/hooks/useAuth';
-import { useLocation, useRoute } from 'wouter';
-import { Card, CardContent } from '@/components/ui/card';
-import { toast } from 'react-toastify';
-import logo from '@client/public/logo.svg';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
+import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/components/ui/input-otp';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, ArrowLeft } from 'lucide-react';
+import { setAuthToken } from '@/api/queryClient';
+import { apiClient } from '@/api/apiClient';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'react-toastify';
 
 export default function VerifyOtp() {
-  const [, setLocation] = useLocation();
-  const [, params] = useRoute<{ email?: string }>('/verify-otp/:email?');
   const [otp, setOtp] = useState('');
-  const [countdown, setCountdown] = useState(600); // 10 minutes
-  const [email, setEmail] = useState<string>('');
-  const { verifyOtp, sendOtp, isLoading, isAuthenticated } = useAuth();
-  const { isLoading: authLoading, isAuthenticated: isAlreadyAuth } = useRedirectAuthenticated();
+  const [loading, setLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [location, setLocation] = useLocation();
+  const { updateUser } = useAuth();
 
-  useEffect(() => {
-    // Try to get email from route params first, then localStorage
-    const emailFromParams = params?.email ? decodeURIComponent(params.email) : null;
-    const emailFromStorage = localStorage.getItem('auth_email');
-
-    if (emailFromParams) {
-      setEmail(emailFromParams);
-      localStorage.setItem('auth_email', emailFromParams);
-    } else if (emailFromStorage) {
-      setEmail(emailFromStorage);
-    } else {
-      // If no email found, redirect to login
-      setLocation('/auth');
-      toast.error('Session Expired. Please sign in again.');
+  // Get email from URL params or localStorage  
+  const email = (() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('email') || localStorage.getItem('sso_email') || '';
     }
-  }, [params, setLocation, toast]);
+    return '';
+  })();
 
-  // Set document title
+  const VIDEOSTREAMPRO_URL = import.meta.env.VITE_VIDEOSTREAMPRO_URL || 'http://localhost:5000';
+  const API_KEY = import.meta.env.VITE_VIDEOSTREAMPRO_API_KEY!; // In production, this would be handled securely
+
   useEffect(() => {
-    document.title = 'Verify OTP - ChunuMunu';
+    document.title = 'Verify OTP - ChunuMunu Ads';
+    
+    // If no email, redirect back to auth
+    if (!email) {
+      setLocation('/auth');
+    }
+
     return () => {
-      document.title = 'ChunuMunu';
+      document.title = 'ChunuMunu Ads';
     };
-  }, []);
+  }, [email, setLocation]);
 
-  useEffect(() => {
-    if (countdown <= 0) return;
-
-    const timer = setInterval(() => {
-      setCountdown((prev) => prev - 1);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [countdown]);
-
-  // Format countdown time as MM:SS
-  const formatCountdown = () => {
-    const minutes = Math.floor(countdown / 60);
-    const seconds = countdown % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (otp.length !== 6) {
-      toast.error('Please enter the 6-digit code sent to your email');
+  const handleVerifyOtp = async () => {
+    if (!otp || otp.length !== 6) {
+      toast.error('Please enter a valid 6-digit OTP');
       return;
     }
 
+    setIsVerifying(true);
+
     try {
-      await verifyOtp(email, otp);
+      const API_KEY = import.meta.env.VITE_VIDEOSTREAMPRO_API_KEY;
+      const BASE_URL = import.meta.env.VITE_VIDEOSTREAMPRO_BASE_URL;
 
-      // Clean up
-      localStorage.removeItem('auth_email');
+      if (!API_KEY || !BASE_URL) {
+        throw new Error('VideoStreamPro configuration missing');
+      }
 
-      // Force redirect based on user role since the hook might not trigger in time
-      // We'll check in 300ms if redirection happened
-      setTimeout(() => {
-        const currentUser = JSON.parse(localStorage.getItem('current_user') || 'null');
-        if (currentUser) {
-          setLocation('/');
-        }
-      }, 300);
-    } catch (error) {
-      console.error('Failed to verify OTP:', error);
+      // Step 1: Verify OTP with VideoStreamPro
+      const otpResponse = await fetch(`${BASE_URL}/api/auth/verify-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          code: otp,
+          apiKey: API_KEY,
+        }),
+      });
+
+      const otpData = await otpResponse.json();
+
+      if (!otpData.success || !otpData.verificationToken) {
+        throw new Error(otpData.message || 'Invalid OTP code');
+      }
+
+      // Step 2: Send the short-lived token to our server for verification
+      const verifyResult = await apiClient.post('/auth/sso/verify-token', {
+        verificationToken: otpData.verificationToken,
+      });
+
+      // Step 3: Store the JWT token and update user state
+      if (verifyResult.data.token && verifyResult.data.user) {
+        setAuthToken(verifyResult.data.token);
+        localStorage.removeItem('sso_email'); // Clean up
+        
+        updateUser(verifyResult.data.user);
+        toast.success('Successfully signed in!');
+        
+        // Redirect to dashboard
+        setLocation('/');
+      } else {
+        throw new Error('Invalid response from server');
+      }
+
+    } catch (error: any) {
+      console.error('Verify OTP error:', error);
+      setError(error.message || 'Verification failed. Please try again.');
+      toast.error(error.message || 'Verification failed');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
   const handleResendOtp = async () => {
+    setResendLoading(true);
+    setError('');
+
     try {
-      await sendOtp(email);
+      const response = await fetch(`${VIDEOSTREAMPRO_URL}/api/auth/send-otp?apiKey=${API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_KEY,
+        },
+        body: JSON.stringify({
+          email,
+          apiKey: API_KEY,
+        }),
+      });
 
-      // Reset countdown
-      setCountdown(600);
+      const data = await response.json();
 
-      toast.success('A new verification code has been sent to your email');
-    } catch (error) {
-      console.error('Failed to resend OTP:', error);
+      if (data.success) {
+        toast.success('OTP resent successfully!');
+        setOtp(''); // Clear current OTP
+      } else {
+        throw new Error(data.message || 'Failed to resend OTP');
+      }
+    } catch (error: any) {
+      console.error('Resend OTP error:', error);
+      setError(error.message || 'Failed to resend OTP');
+      toast.error(error.message || 'Failed to resend OTP');
+    } finally {
+      setResendLoading(false);
     }
   };
 
-  const handleChangeEmail = () => {
-    localStorage.removeItem('auth_email');
+  const handleBackToEmail = () => {
+    localStorage.removeItem('sso_email');
     setLocation('/auth');
   };
 
-  if (authLoading || isAlreadyAuth) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-16 w-16 animate-spin rounded-full border-4 border-border border-t-primary"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <Card className="mx-4 w-full max-w-md bg-card">
-        <CardContent className="px-8 pb-8 pt-6">
-          <div className="mb-6 flex flex-col items-center text-center">
-            <img src={logo} alt="Logo" className="h-10 w-10" />
-            <h1 className="mt-2 text-2xl font-bold">Verify your email</h1>
-            <p className="mt-1 text-muted-foreground">We've sent a 6-digit code to {email}</p>
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold">Enter Verification Code</CardTitle>
+          <CardDescription>
+            We've sent a 6-digit code to <span className="font-medium">{email}</span>
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          {error && (
+            <div className="p-3 rounded-md bg-red-50 border border-red-200">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div className="flex justify-center">
+              <InputOTP
+                value={otp}
+                onChange={setOtp}
+                maxLength={6}
+                disabled={isVerifying}
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSeparator />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                  <InputOTPSeparator />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
+
+            <Button
+              onClick={handleVerifyOtp}
+              className="w-full"
+              disabled={isVerifying || otp.length !== 6}
+            >
+              {isVerifying ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                'Verify & Sign In'
+              )}
+            </Button>
+
+            <div className="flex flex-col space-y-2">
+              <Button
+                variant="outline"
+                onClick={handleResendOtp}
+                disabled={resendLoading || isVerifying}
+                className="w-full"
+              >
+                {resendLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Resending...
+                  </>
+                ) : (
+                  'Resend Code'
+                )}
+              </Button>
+
+              <Button
+                variant="ghost"
+                onClick={handleBackToEmail}
+                disabled={isVerifying}
+                className="w-full"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Email
+              </Button>
+            </div>
           </div>
 
-          <form onSubmit={handleVerify} className="space-y-4">
-            <div className="flex justify-center">
-              <OtpInput value={otp} onChange={setOtp} />
-            </div>
-
-            <div className="flex justify-between text-sm">
-              <Button
-                variant="link"
-                className="text-primary"
-                onClick={handleResendOtp}
-                disabled={countdown > 0 || isLoading}
-              >
-                {countdown > 0 ? `Resend in ${formatCountdown()}` : 'Resend code'}
-              </Button>
-              <p>{countdown > 0 ? `Valid for ${formatCountdown()}` : 'Expired'}</p>
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full rounded-lg bg-primary py-2 font-medium text-foreground disabled:opacity-50"
-              disabled={isLoading || otp.length !== 6}
-            >
-              {isLoading ? 'Verifying...' : 'Verify'}
-            </Button>
-
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={handleChangeEmail}
-              disabled={isLoading}
-            >
-              Change email
-            </Button>
-          </form>
-
-          <div className="mt-6 border-t border-gray-200 pt-6 text-center dark:border-gray-700">
+          <div className="text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              By continuing, you agree to ChunuMunu's Terms of Service and Privacy Policy.
+              Didn't receive the code? Check your spam folder or try resending.
             </p>
           </div>
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-interface OtpInputProps {
-  value: string;
-  onChange: (value: string) => void;
-}
-
-export function OtpInput({ value, onChange }: OtpInputProps) {
-  return (
-    <InputOTP maxLength={6} value={value} onChange={onChange} pattern="[0-9]*">
-      <InputOTPGroup>
-        <InputOTPSlot index={0} className="size-12" />
-        <InputOTPSlot index={1} className="size-12" />
-        <InputOTPSeparator />
-        <InputOTPSlot index={2} className="size-12" />
-        <InputOTPSlot index={3} className="size-12" />
-        <InputOTPSeparator />
-        <InputOTPSlot index={4} className="size-12" />
-        <InputOTPSlot index={5} className="size-12" />
-      </InputOTPGroup>
-    </InputOTP>
   );
 }

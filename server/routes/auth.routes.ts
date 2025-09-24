@@ -1,28 +1,22 @@
-import type { Express, Request, Response, NextFunction } from 'express';
+import type { Express } from 'express';
 import { AuthController } from '../controllers/auth.controller';
 
 export function registerAuthRoutes(app: Express): void {
-  // Send OTP to email
-  app.post('/api/auth/send-otp', AuthController.sendOtp);
-
-  // Verify OTP and authenticate user
-  app.post('/api/auth/verify-otp', AuthController.verifyOtp);
-
-  // Google OAuth authentication
-  app.post('/api/auth/google', AuthController.googleAuth);
-
-  // Test endpoint for Google OAuth
-  app.get('/api/auth/google/test', (req: Request, res: Response) => {
-    res.json({
-      message: 'Google OAuth endpoint is working',
-      clientId: process.env.GOOGLE_CLIENT_ID ? 'Configured' : 'Not configured',
-      viteClientId: process.env.VITE_GOOGLE_CLIENT_ID ? 'Configured' : 'Not configured',
-      allEnvVars: Object.keys(process.env).filter((key) => key.includes('GOOGLE')),
-    });
-  });
+  // VideoStreamPro SSO - Verify token from client
+  app.post('/api/auth/sso/verify-token', AuthController.verifyToken);
 
   // Get current authenticated user info
   app.get('/api/auth/me', AuthController.getCurrentUser);
+
+  // Debug endpoint to check authentication
+  app.get('/api/auth/debug', (req, res) => {
+    res.json({
+      hasAuthHeader: !!req.headers.authorization,
+      authHeader: req.headers.authorization?.substring(0, 20) + '...',
+      hasSession: !!req.session?.userId,
+      sessionUserId: req.session?.userId,
+    });
+  });
 
   // Logout route
   app.post('/api/auth/logout', AuthController.logout);

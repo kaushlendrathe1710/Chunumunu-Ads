@@ -6,7 +6,7 @@ import { Permission } from '@shared/types';
 import { AuthenticatedRequest } from '../types';
 
 // For JWT authentication
-const JWT_SECRET = process.env.JWT_SECRET!;
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
 
 // Helper function to extract JWT token from request
 const extractToken = (req: AuthenticatedRequest): string | null => {

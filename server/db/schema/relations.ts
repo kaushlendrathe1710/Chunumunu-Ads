@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { users, otpCodes, session } from './user.schema';
+import { users, session } from './user.schema';
 import { teams, teamMembers } from './team.schema';
 import { campaigns, ads } from './campaign.schema';
 import { wallets, transactions } from './wallet.schema';
@@ -93,9 +93,6 @@ export const adImpressionsRelations = relations(adImpressions, ({ one }) => ({
   }),
   // Note: no user relation since ads run on external platforms
 }));
-
-// OTP codes table relations (standalone table for email verification)
-export const otpCodesRelations = relations(otpCodes, () => ({}));
 
 // Session table relations (standalone table for express-session)
 export const sessionRelations = relations(session, () => ({}));

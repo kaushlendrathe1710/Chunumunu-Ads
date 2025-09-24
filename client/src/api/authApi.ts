@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient } from './apiClient';
 
 export interface AuthUser {
   id: number;
@@ -11,7 +11,7 @@ export interface AuthUser {
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
   try {
-    const { data } = await axios.get<{ user: AuthUser }>('/api/auth/me', { withCredentials: true });
+    const { data } = await apiClient.get<{ user: AuthUser }>('/auth/me');
     return data.user || null;
   } catch {
     return null;

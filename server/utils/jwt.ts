@@ -1,11 +1,11 @@
 // JWT utilities
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-const JWT_EXPIRY = process.env.JWT_EXPIRY!;
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
+const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
 
 export function generateToken(userId: number): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRY } as SignOptions);
 }
 
 export function verifyToken(token: string): { userId: number } {

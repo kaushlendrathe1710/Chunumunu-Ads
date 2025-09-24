@@ -9,6 +9,8 @@ interface AuthState {
   error: string | null;
 }
 
+const AUTH_SERVER = import.meta.env.VITE_AUTH_SERVER;
+
 // Try to get initial authentication state from localStorage
 const getInitialAuthState = (): { user: User | null; isAuthenticated: boolean } => {
   try {
@@ -39,7 +41,7 @@ const initialState: AuthState = {
 // Async thunk for fetching current user
 export const fetchMe = createAsyncThunk('auth/fetchMe', async (_, { rejectWithValue }) => {
   try {
-    const response = await apiRequest('GET', '/api/auth/me');
+    const response = await apiRequest('GET', `${AUTH_SERVER}/api/auth/me`);
     const data = await response.json();
     return data;
   } catch (error: any) {
@@ -52,7 +54,7 @@ export const sendOtp = createAsyncThunk(
   'auth/sendOtp',
   async (email: string, { rejectWithValue }) => {
     try {
-      await apiRequest('POST', '/api/auth/send-otp', { email });
+      await apiRequest('POST', `${AUTH_SERVER}/api/auth/send-otp`, { email });
       return email;
     } catch (error: any) {
       return rejectWithValue(error?.message || 'Failed to send OTP');
@@ -65,7 +67,10 @@ export const verifyOtp = createAsyncThunk(
   'auth/verifyOtp',
   async ({ email, code }: { email: string; code: string }, { rejectWithValue }) => {
     try {
-      const response = await apiRequest('POST', '/api/auth/verify-otp', { email, code });
+      const response = await apiRequest('POST', `${AUTH_SERVER}/api/auth/verify-otp`, {
+        email,
+        code,
+      });
       const data = await response.json();
       return data;
     } catch (error: any) {
@@ -77,7 +82,7 @@ export const verifyOtp = createAsyncThunk(
 // Logout async thunk
 export const logout = createAsyncThunk('auth/logout', async (_, { rejectWithValue }) => {
   try {
-    await apiRequest('POST', '/api/auth/logout', {});
+    await apiRequest('POST', `${AUTH_SERVER}/api/auth/logout`, {});
   } catch (error: any) {
     // Continue with logout even if API call fails
     console.warn('Logout API call failed:', error);

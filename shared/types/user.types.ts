@@ -1,6 +1,6 @@
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
-import { users, otpCodes, userRoleEnum } from '@server/db/schema';
+import { users, userRoleEnum } from '@server/db/schema';
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -10,21 +10,14 @@ export const insertUserSchema = createInsertSchema(users).pick({
   bio: true,
   role: true,
   isVerified: true,
-});
-
-export const insertOtpCodeSchema = createInsertSchema(otpCodes).pick({
-  email: true,
-  code: true,
-  expiresAt: true,
+  videostreamproId: true,
+  authProvider: true,
 });
 
 // TypeScript types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type UserRole = (typeof userRoleEnum.enumValues)[number];
-
-export type InsertOtpCode = z.infer<typeof insertOtpCodeSchema>;
-export type OtpCode = typeof otpCodes.$inferSelect;
 
 // Profile update validation schema
 export const updateProfileSchema = z.object({
