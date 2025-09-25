@@ -35,8 +35,6 @@ export default defineConfig({
             'lucide-react',
             'framer-motion',
             '@aws-sdk/client-s3',
-            '@stripe/react-stripe-js',
-            '@stripe/stripe-js',
           ],
         },
       },
