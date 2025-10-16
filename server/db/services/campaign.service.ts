@@ -5,12 +5,17 @@ import { InsertCampaign, Campaign } from '@shared/types';
 
 export class CampaignService {
   static async createCampaign(campaignData: InsertCampaign, createdBy: number) {
+    // Ensure date fields are Date objects for the DB layer
+    const dataToInsert = {
+      ...campaignData,
+      startDate: campaignData.startDate ? new Date(campaignData.startDate as any) : undefined,
+      endDate: campaignData.endDate ? new Date(campaignData.endDate as any) : undefined,
+      createdBy,
+    };
+
     const [campaign] = await db
       .insert(campaigns)
-      .values({
-        ...campaignData,
-        createdBy,
-      })
+      .values(dataToInsert)
       .returning();
 
     return campaign;
@@ -66,10 +71,16 @@ export class CampaignService {
   }
 
   static async updateCampaign(campaignId: number, updates: Partial<InsertCampaign>) {
+    const updatesToApply = {
+      ...updates,
+      startDate: updates.startDate ? new Date(updates.startDate as any) : undefined,
+      endDate: updates.endDate ? new Date(updates.endDate as any) : undefined,
+    };
+
     const [campaign] = await db
       .update(campaigns)
       .set({
-        ...updates,
+        ...updatesToApply,
         updatedAt: new Date(),
       })
       .where(eq(campaigns.id, campaignId))

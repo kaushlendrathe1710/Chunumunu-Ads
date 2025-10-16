@@ -44,8 +44,11 @@ function Wrapper() {
             bio: (user as any).bio ?? null,
             isVerified: user.isVerified ?? null,
             role: user.role || 'user',
-            createdAt: null,
-            updatedAt: null,
+            // Fill required fields expected by shared User type with sensible defaults
+            videostreamproId: (user as any).videostreamproId ?? 0,
+            authProvider: (user as any).authProvider ?? 'local',
+            createdAt: user.createdAt ? new Date(user.createdAt) : null,
+            updatedAt: user.updatedAt ? new Date(user.updatedAt) : null,
           })
         );
       }

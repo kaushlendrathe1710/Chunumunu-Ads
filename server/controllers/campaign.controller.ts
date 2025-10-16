@@ -10,18 +10,35 @@ import { deleteFileFromS3 } from '../config/s3';
 import { db, TeamService, userService } from '@server/db';
 import { transactions } from '@server/db/schema/wallet.schema';
 import { and, eq } from 'drizzle-orm';
+import { insertCampaignSchema, updateCampaignSchema } from '@shared/types/campaign.types';
 
-// Validation schemas
+// Create campaign schema without teamId
 const createCampaignSchema = z.object({
-  name: z.string().min(1, 'Campaign name is required').max(100),
+  name: z.string().min(1, 'Name is required').max(100),
   description: z.string().optional(),
-  budget: z.number().positive('Budget must be positive'),
+  budget: z.number().min(0).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-  status: z.enum(['draft', 'active', 'paused', 'completed']).default('draft'),
+  status: z.enum(['draft', 'active', 'paused', 'completed']).optional(),
+}).refine((data) => {
+  if (data.startDate && data.endDate) {
+    const startDate = new Date(data.startDate);
+    const endDate = new Date(data.endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (startDate < today) {
+      return false;
+    }
+    
+    if (endDate <= startDate) {
+      return false;
+    }
+  }
+  return true;
+}, {
+  message: 'Invalid date range: start date cannot be in the past and end date must be after start date',
 });
-
-const updateCampaignSchema = createCampaignSchema.partial();
 
 export class CampaignController {
   // Campaign methods
@@ -211,7 +228,7 @@ export class CampaignController {
       // Handle budget changes with wallet balance validation
       if (validation.data.budget !== undefined) {
         const currentBudget = parseFloat(currentCampaign.budget || '0');
-        const newBudget = validation.data.budget;
+        const newBudget = Number(validation.data.budget) || 0;
         const budgetDifference = newBudget - currentBudget;
 
         if (budgetDifference > 0) {

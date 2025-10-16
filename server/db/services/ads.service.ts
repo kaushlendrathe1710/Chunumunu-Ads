@@ -1,6 +1,6 @@
 import { db } from '@server/db';
 import { campaigns, ads } from '@server/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { InsertAd, Ad, AdBudgetInfo, CampaignBudgetValidation } from '@shared/types';
 
 export class AdsService {
@@ -80,22 +80,37 @@ export class AdsService {
    * Get all ads for a team (across all campaigns)
    */
   static async getTeamAds(teamId: number): Promise<Ad[]> {
-    const result = await db
-      .select()
-      .from(ads)
-      .innerJoin(campaigns, eq(ads.campaignId, campaigns.id))
-      .where(eq(campaigns.teamId, teamId))
-      .orderBy(desc(ads.createdAt));
-
-    // Transform the result to match the Ad type with campaign info
-    return result.map((row) => ({
-      ...row.ads,
-      campaign: {
-        id: row.campaigns.id,
-        name: row.campaigns.name,
-        teamId: row.campaigns.teamId,
+    const result = await db.query.ads.findMany({
+      where: (ads, { exists, eq }) => 
+        exists(
+          db.select().from(campaigns).where(
+            and(
+              eq(campaigns.id, ads.campaignId),
+              eq(campaigns.teamId, teamId)
+            )
+          )
+        ),
+      with: {
+        creator: {
+          columns: {
+            id: true,
+            username: true,
+            email: true,
+            avatar: true,
+          },
+        },
+        campaign: {
+          columns: {
+            id: true,
+            name: true,
+            teamId: true,
+          },
+        },
       },
-    }));
+      orderBy: (ads, { desc }) => [desc(ads.createdAt)],
+    });
+
+    return result;
   }
 
   /**

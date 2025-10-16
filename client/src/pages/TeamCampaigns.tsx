@@ -2,18 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTeam } from '@/hooks/useTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,23 +10,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, MoreVertical, Eye, Wallet, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { Plus, MoreVertical, Eye, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { DatePicker } from '@/components/common/DatePicker';
-import CampaignAPI, {
-  CreateCampaignPayload,
-  TeamWalletBalance,
-  CampaignDto,
-} from '@/api/campaignApi';
+import CampaignAPI, { CampaignDto, TeamWalletBalance } from '@/api/campaignApi';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QK } from '@/api/queryKeys';
-import { campaignSchema } from '@/utils/schemas';
-import { z } from 'zod';
+import { CreateCampaignDialog } from '@/components/campaigns/CreateCampaignDialog';
 import { EditCampaignDialog } from '@/components/campaigns/EditCampaignDialog';
 import { CampaignDetailsDialog } from '@/components/campaigns/CampaignDetailsDialog';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { getCampaignAvailableBalance } from '@/utils';
 import { campaignStatus } from '@shared/constants';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface Campaign {
   id: string;
@@ -60,20 +44,6 @@ interface Campaign {
   };
 }
 
-interface CreateCampaignData {
-  name: string;
-  description: string;
-  budget: number;
-  startDate: Date | undefined;
-  endDate: Date | undefined;
-  status: string;
-}
-
-interface WalletBalance {
-  balance: string;
-  currency: string;
-}
-
 export default function TeamCampaigns() {
   const { currentTeam, userRole, hasPermission } = useTeam();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -83,14 +53,6 @@ export default function TeamCampaigns() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
-  const [formData, setFormData] = useState<CreateCampaignData>({
-    name: '',
-    description: '',
-    budget: 0,
-    startDate: undefined,
-    endDate: undefined,
-    status: campaignStatus.draft,
-  });
 
   const queryClient = useQueryClient();
   const campaignsQuery = useQuery<CampaignDto[]>({
@@ -141,64 +103,9 @@ export default function TeamCampaigns() {
     },
     enabled: !!currentTeam,
     staleTime: 30_000,
-    placeholderData: (prev) => prev || null,
+    placeholderData: (prev: TeamWalletBalance | null | undefined) => prev || null,
   });
   const teamWalletBalance = teamWalletBalanceQuery.data;
-
-  const handleCreateCampaign = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentTeam) return;
-
-    // Validate via zod
-    const parseResult = campaignSchema.safeParse(formData);
-    if (!parseResult.success) {
-      const first = parseResult.error.errors[0];
-      toast.error(first.message);
-      return;
-    }
-    if (!formData.startDate || !formData.endDate) {
-      toast.error('Start and end date required');
-      return;
-    }
-
-    // Check wallet balance if budget is specified
-    if (formData.budget > 0 && teamWalletBalance) {
-      const availableBalance = parseFloat(teamWalletBalance.balance);
-      if (formData.budget > availableBalance) {
-        toast.error(
-          `Insufficient wallet balance. Available: $${availableBalance.toFixed(2)}, Required: $${formData.budget.toFixed(2)}`
-        );
-        return;
-      }
-    }
-
-    try {
-      const payload: CreateCampaignPayload = {
-        name: formData.name.trim(),
-        description: formData.description?.trim() || '',
-        budget: formData.budget,
-        startDate: formData.startDate.toISOString(),
-        endDate: formData.endDate.toISOString(),
-        status: formData.status as any,
-      };
-      await CampaignAPI.create(currentTeam.id, payload);
-      toast.success('Campaign created successfully');
-      setCreateModalOpen(false);
-      setFormData({
-        name: '',
-        description: '',
-        budget: 0,
-        startDate: undefined,
-        endDate: undefined,
-        status: campaignStatus.draft,
-      });
-      queryClient.invalidateQueries({ queryKey: QK.campaigns(currentTeam.id) });
-      queryClient.invalidateQueries({ queryKey: QK.teamWalletBalance(currentTeam.id) });
-    } catch (error) {
-      console.error('Failed to create campaign:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to create campaign');
-    }
-  };
 
   const handleEditCampaign = (campaign: Campaign) => {
     setSelectedCampaign(campaign);
@@ -292,153 +199,10 @@ export default function TeamCampaigns() {
         </div>
 
         {canManageCampaigns && (
-          <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Campaign
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Campaign</DialogTitle>
-              </DialogHeader>
-
-              {/* Wallet Balance Display */}
-              {teamWalletBalance && (
-                <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3">
-                  <div className="flex items-center space-x-2">
-                    <Wallet className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-900">
-                      Available Balance: ${parseFloat(teamWalletBalance.balance).toFixed(2)}{' '}
-                      {teamWalletBalance.currency}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-blue-700">
-                    Team: {teamWalletBalance.teamName} (Owner's Wallet)
-                  </p>
-                  {formData.budget > 0 &&
-                    parseFloat(teamWalletBalance.balance) < formData.budget && (
-                      <div className="mt-2 flex items-center space-x-2">
-                        <AlertCircle className="h-4 w-4 text-orange-600" />
-                        <span className="text-sm text-orange-800">
-                          Insufficient balance for this budget amount
-                        </span>
-                      </div>
-                    )}
-                </div>
-              )}
-
-              <form onSubmit={handleCreateCampaign} className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-sm font-medium">Campaign Name</label>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Enter campaign name"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium">Description</label>
-                  <Textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Describe your campaign"
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium">Budget ($)</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.budget || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, budget: parseFloat(e.target.value) || 0 })
-                    }
-                    placeholder="0.00"
-                    required
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Budget will be deducted from your wallet when campaign becomes active
-                  </p>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium">Start Date</label>
-                  <DatePicker
-                    date={formData.startDate}
-                    onDateChange={(date) => setFormData({ ...formData, startDate: date })}
-                    placeholder="Select start date"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium">End Date</label>
-                  <DatePicker
-                    date={formData.endDate}
-                    onDateChange={(date) => setFormData({ ...formData, endDate: date })}
-                    placeholder="Select end date"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-3 block text-sm font-medium">Campaign Status</label>
-                  <RadioGroup
-                    value={formData.status}
-                    onValueChange={(value) => setFormData({ ...formData, status: value })}
-                    className="grid grid-cols-2 gap-4"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value={campaignStatus.draft} id="draft" />
-                      <Label htmlFor="draft" className="font-normal">
-                        Draft
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value={campaignStatus.active} id="active" />
-                      <Label htmlFor="active" className="font-normal">
-                        Active
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value={campaignStatus.paused} id="paused" />
-                      <Label htmlFor="paused" className="font-normal">
-                        Paused
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value={campaignStatus.completed} id="completed" />
-                      <Label htmlFor="completed" className="font-normal">
-                        Completed
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <Button
-                    type="submit"
-                    className="flex-1"
-                    disabled={
-                      formData.budget > 0 && teamWalletBalance
-                        ? parseFloat(teamWalletBalance.balance) < formData.budget
-                        : false
-                    }
-                  >
-                    Create Campaign
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setCreateModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Campaign
+          </Button>
         )}
       </div>
 
@@ -552,11 +316,22 @@ export default function TeamCampaigns() {
 
                 <div className="mt-4 border-t pt-4">
                   <div className="flex justify-between text-sm text-gray-500">
-                    <div className="flex flex-col space-y-1">
+                    {campaign.creator && (
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span>Created By: </span>
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={campaign.creator.avatar || undefined} />
+                          <AvatarFallback className="text-xs">
+                            {campaign.creator.username.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{campaign.creator.username}</span>
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1">
                       <span>Created: {new Date(campaign.createdAt).toLocaleDateString()}</span>
-                      {campaign.creator && <span>By: {campaign.creator.username}</span>}
+                      <span>Updated: {new Date(campaign.updatedAt).toLocaleDateString()}</span>
                     </div>
-                    <span>Updated: {new Date(campaign.updatedAt).toLocaleDateString()}</span>
                   </div>
                 </div>
               </CardContent>
@@ -566,8 +341,27 @@ export default function TeamCampaigns() {
       </div>
 
       {/* Dialog Components */}
+      <CreateCampaignDialog
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        teamId={currentTeam?.id || 0}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: QK.campaigns(currentTeam!.id) });
+          queryClient.invalidateQueries({ queryKey: QK.teamWalletBalance(currentTeam!.id) });
+        }}
+      />
+
       <EditCampaignDialog
-        campaign={selectedCampaign}
+        campaign={
+          selectedCampaign
+            ? {
+                ...selectedCampaign,
+                id: parseInt(selectedCampaign.id),
+                budget: selectedCampaign.budget.toString(),
+                spent: selectedCampaign.spent.toString(),
+              }
+            : null
+        }
         isOpen={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         teamId={currentTeam?.id || 0}
@@ -617,7 +411,16 @@ export default function TeamCampaigns() {
       </ConfirmDialog>
 
       <CampaignDetailsDialog
-        campaign={selectedCampaign}
+        campaign={
+          selectedCampaign
+            ? {
+                ...selectedCampaign,
+                id: parseInt(selectedCampaign.id),
+                budget: selectedCampaign.budget.toString(),
+                spent: selectedCampaign.spent.toString(),
+              }
+            : null
+        }
         isOpen={detailsModalOpen}
         onClose={() => setDetailsModalOpen(false)}
       />

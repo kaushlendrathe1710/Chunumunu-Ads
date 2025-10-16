@@ -234,22 +234,8 @@ export default function TeamAds() {
                       <CardDescription className="mt-2">{ad.description}</CardDescription>
                     )}
                     <div className="mt-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <span>Campaign: {ad.campaign?.name}</span>
-                        </div>
-                        {ad.creator && (
-                          <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <User className="h-4 w-4" />
-                            <Avatar className="h-5 w-5">
-                              <AvatarImage src={ad.creator.avatar || undefined} />
-                              <AvatarFallback className="text-xs">
-                                {ad.creator.username.charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span>{ad.creator.username}</span>
-                          </div>
-                        )}
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span>Campaign: {ad.campaign?.name}</span>
                       </div>
                     </div>
                   </div>
@@ -358,8 +344,22 @@ export default function TeamAds() {
                 {/* Additional Info */}
                 <div className="mt-4 border-t pt-4">
                   <div className="flex justify-between text-sm text-gray-500">
-                    <span>Created: {new Date(ad.createdAt).toLocaleDateString()}</span>
-                    <span>Updated: {new Date(ad.updatedAt).toLocaleDateString()}</span>
+                    {ad.creator && (
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span>Created By: </span>
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={ad.creator.avatar || undefined} />
+                          <AvatarFallback className="text-xs">
+                            {ad.creator.username.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{ad.creator.username}</span>
+                      </div>
+                    )}
+                    <div className='flex flex-col gap-1'>
+                      <span>Created: {new Date(ad.createdAt).toLocaleDateString()}</span>
+                      <span>Updated: {new Date(ad.updatedAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
               </CardContent>

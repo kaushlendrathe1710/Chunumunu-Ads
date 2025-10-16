@@ -28,9 +28,10 @@ export interface CampaignDto {
 export interface CreateCampaignPayload {
   name: string;
   description?: string;
-  budget: number;
-  startDate?: string; // ISO
-  endDate?: string; // ISO
+  // budget is sent as a decimal string to match server DB/validation expectations
+  budget: string;
+  startDate?: Date; // send Date object (JSON will serialize it) to allow server-side Date parsing
+  endDate?: Date; // send Date object
   status?: 'draft' | 'active' | 'paused' | 'completed';
 }
 
