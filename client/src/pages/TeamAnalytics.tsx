@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { QK } from '@/api/queryKeys';
 import AnalyticsAPI, { TeamAnalyticsDto } from '@/api/analyticsApi';
+import { permission, teamRole } from '@shared/constants';
 import {
   BarChart3,
   TrendingUp,
@@ -56,7 +57,7 @@ export default function TeamAnalytics() {
   }
 
   const canViewAnalytics =
-    userRole === 'owner' || userRole === 'admin' || hasPermission('view_campaign');
+    userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.view_campaign);
 
   if (!canViewAnalytics) {
     return (

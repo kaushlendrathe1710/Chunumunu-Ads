@@ -33,6 +33,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import AdAPI, { AdDto } from '@/api/adApi';
 import CampaignAPI from '@/api/campaignApi';
 import { QK } from '@/api/queryKeys';
+import { permission, teamRole } from '@shared/constants';
 
 type Ad = AdDto & { campaignName?: string };
 
@@ -149,7 +150,7 @@ export default function TeamAds() {
     );
   }
 
-  const canManageAds = userRole === 'owner' || userRole === 'admin' || hasPermission('create_ad');
+  const canManageAds = userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.create_ad);
 
   return (
     <div className="space-y-6 p-6">
@@ -250,7 +251,7 @@ export default function TeamAds() {
                     </div>
                   )}
 
-                  {canManageAds && (
+                  {(canManageAds || hasPermission(permission.view_ad)) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="ml-2">
@@ -258,20 +259,26 @@ export default function TeamAds() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditingAd(ad)}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit Ad
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setViewingAd(ad)}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-red-600"
-                          onClick={() => setDeleteTarget(ad)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
+                        {hasPermission(permission.view_ad) && (
+                          <DropdownMenuItem onClick={() => setViewingAd(ad)}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Details
+                          </DropdownMenuItem>
+                        )}
+                        {hasPermission(permission.edit_ad) && (
+                          <DropdownMenuItem onClick={() => setEditingAd(ad)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Ad
+                          </DropdownMenuItem>
+                        )}
+                        {hasPermission(permission.delete_ad) && (
+                          <DropdownMenuItem
+                            className="text-red-600"
+                            onClick={() => setDeleteTarget(ad)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}

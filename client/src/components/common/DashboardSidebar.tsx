@@ -14,6 +14,7 @@ import {
 import { Home, Tag, Users, Settings, PlayCircle, Wallet, Building } from 'lucide-react';
 import { useTeam } from '@/hooks/useTeam';
 import { Separator } from '@radix-ui/react-select';
+import { teamRole } from '@shared/constants';
 
 export default function DashboardSidebar() {
   const { user } = useAuth();
@@ -23,7 +24,7 @@ export default function DashboardSidebar() {
   const isActive = (path: string) => location === path || location.startsWith(path + '/');
 
   // Only show team management if user is on a team and has admin+ permissions
-  const hasTeamManagement = currentTeam && (userRole === 'owner' || userRole === 'admin');
+  const hasTeamManagement = currentTeam && (userRole === teamRole.owner || userRole === teamRole.admin);
 
   return (
     <Sidebar side="left" variant="sidebar" collapsible="icon">

@@ -14,13 +14,16 @@ This implementation provides a complete ad serving system for your Node.js ads p
 
 ```json
 {
-  "videoId": "video_123", // Your video's unique ID
-  "category": "entertainment", // Video category (entertainment, sports, news, etc.)
-  "tags": ["action", "adventure"], // Video tags for ad matching
-  "viewerId": "user_456", // Optional: Logged-in user ID
-  "sessionId": "session_789" // Optional: Session identifier
+  "videoId": "video_123", // Your video's unique ID (required)
+  "category": "entertainment", // Optional: Video category (entertainment, sports, news, etc.)
+  "tags": ["action", "adventure"], // Optional: Video tags for ad matching
+  "user_id": "user_456", // Optional: Logged-in user ID (required if anon_id not provided)
+  "anon_id": "anon_789", // Optional: Anonymous user ID (required if user_id not provided)
+  "sessionId": "session_xyz" // Optional: Session identifier
 }
 ```
+
+**Note**: Either `category` OR `tags` (or both) must be provided to match ads. At least one of `user_id` or `anon_id` is required for tracking.
 
 **Success Response (200):**
 

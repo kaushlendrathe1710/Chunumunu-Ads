@@ -20,7 +20,7 @@ import { EditCampaignDialog } from '@/components/campaigns/EditCampaignDialog';
 import { CampaignDetailsDialog } from '@/components/campaigns/CampaignDetailsDialog';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { getCampaignAvailableBalance } from '@/utils';
-import { campaignStatus } from '@shared/constants';
+import { campaignStatus, permission, teamRole } from '@shared/constants';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface Campaign {
@@ -188,7 +188,7 @@ export default function TeamCampaigns() {
   }
 
   const canManageCampaigns =
-    userRole === 'owner' || userRole === 'admin' || hasPermission('create_campaign');
+    userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.create_campaign);
 
   return (
     <div className="space-y-6 p-6">
@@ -240,7 +240,7 @@ export default function TeamCampaigns() {
                     )}
                   </div>
 
-                  {canManageCampaigns && (
+                  {(canManageCampaigns || hasPermission(permission.view_campaign)) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm">
@@ -253,20 +253,24 @@ export default function TeamCampaigns() {
                           View Details
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => handleEditCampaign(campaign)}
-                          disabled={campaign.status === 'completed'}
-                        >
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit Campaign
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleDeleteCampaign(campaign)}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete Campaign
-                        </DropdownMenuItem>
+                        {canManageCampaigns && (userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.edit_campaign)) && (
+                          <DropdownMenuItem
+                            onClick={() => handleEditCampaign(campaign)}
+                            disabled={campaign.status === 'completed'}
+                          >
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Campaign
+                          </DropdownMenuItem>
+                        )}
+                        {canManageCampaigns && (userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.delete_campaign)) && (
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteCampaign(campaign)}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Campaign
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}

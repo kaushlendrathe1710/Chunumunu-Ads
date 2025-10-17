@@ -3,8 +3,8 @@ import { z } from 'zod';
 // Request schema for POST /ads/serve
 export const serveAdRequestSchema = z.object({
   videoId: z.string().min(1, 'Video ID is required'),
-  category: z.string().min(1, 'Category is required'),
-  tags: z.array(z.string()).min(1, 'At least one tag is required'),
+  category: z.string().optional(), // Made optional
+  tags: z.array(z.string()).optional(), // Made optional
   user_id: z.string().optional(), // Authenticated user ID
   anon_id: z.string().optional(), // Anonymous user ID
   sessionId: z.string().optional(),
@@ -13,6 +13,12 @@ export const serveAdRequestSchema = z.object({
   {
     message: "Either user_id (for authenticated users) or anon_id (for anonymous users) must be provided",
     path: ["user_id", "anon_id"],
+  }
+).refine(
+  (data) => data.category || (data.tags && data.tags.length > 0),
+  {
+    message: "Either category or at least one tag must be provided",
+    path: ["category", "tags"],
   }
 );
 

@@ -19,12 +19,33 @@ export class AdSelectorService {
   /**
    * Fetch candidate ads that are eligible for serving
    * Enhanced to be more lenient and find the best available ads
+   * Supports optional category and tags (at least one must be provided)
    */
-  static async fetchCandidateAds(category: string, tags: string[]): Promise<CandidateAd[]> {
+  static async fetchCandidateAds(category?: string, tags?: string[]): Promise<CandidateAd[]> {
     const now = new Date().toISOString(); // Convert to ISO string for PostgreSQL
 
-    // Convert JavaScript array to PostgreSQL array format safely
-    const tagsArray = `{${tags.map((tag) => `"${tag.replace(/"/g, '""')}"`).join(',')}}`;
+    // Build WHERE conditions based on what's provided
+    const hasCategory = category && category.trim().length > 0;
+    const hasTags = tags && tags.length > 0;
+
+    // Build the match condition dynamically
+    let matchCondition = sql`TRUE`;
+    
+    if (hasCategory && hasTags) {
+      // Both provided - match either category or tags
+      const tagsArray = `{${tags.map((tag) => `"${tag.replace(/"/g, '""')}"`).join(',')}}`;
+      matchCondition = sql`(
+        a.categories && ARRAY[${category}]::text[]
+        OR a.tags && ${tagsArray}::text[]
+      )`;
+    } else if (hasCategory) {
+      // Only category provided
+      matchCondition = sql`a.categories && ARRAY[${category}]::text[]`;
+    } else if (hasTags) {
+      // Only tags provided
+      const tagsArray = `{${tags.map((tag) => `"${tag.replace(/"/g, '""')}"`).join(',')}}`;
+      matchCondition = sql`a.tags && ${tagsArray}::text[]`;
+    }
 
     // First try to find ads with exact category/tag matches
     let result = await db.execute(sql`
@@ -48,10 +69,7 @@ export class AdSelectorService {
         AND c.status = 'active'
         AND (c.start_date IS NULL OR c.start_date <= ${now})
         AND (c.end_date IS NULL OR c.end_date >= ${now})
-        AND (
-          a.categories && ARRAY[${category}]::text[]
-          OR a.tags && ${tagsArray}::text[]
-        )
+        AND ${matchCondition}
       ORDER BY RANDOM()
       LIMIT ${AD_SERVING_LIMITS.MAX_CANDIDATES}
     `);
@@ -87,7 +105,7 @@ export class AdSelectorService {
 
     const candidateAds = result;
 
-    console.log(`Found ${candidateAds.length} candidate ads`);
+    console.log(`Found ${candidateAds.length} candidate ads (category: ${category || 'none'}, tags: ${tags?.join(',') || 'none'})`);
 
     return candidateAds.map((ad: any) => ({
       ...ad,
@@ -123,9 +141,10 @@ export class AdSelectorService {
 
   /**
    * Calculate tag overlap score between video tags and ad tags
+   * Returns 0 if no tags provided
    */
-  static calculateTagOverlap(videoTags: string[], adTags: string[]): number {
-    if (videoTags.length === 0 || adTags.length === 0) {
+  static calculateTagOverlap(videoTags: string[] | undefined, adTags: string[]): number {
+    if (!videoTags || videoTags.length === 0 || adTags.length === 0) {
       return 0;
     }
 
@@ -141,8 +160,13 @@ export class AdSelectorService {
 
   /**
    * Calculate category match score
+   * Returns 0 if no category provided
    */
-  static calculateCategoryMatch(videoCategory: string, adCategories: string[]): number {
+  static calculateCategoryMatch(videoCategory: string | undefined, adCategories: string[]): number {
+    if (!videoCategory || !videoCategory.trim()) {
+      return 0;
+    }
+
     const videoCategoryLower = videoCategory.toLowerCase();
     const adCategoriesLower = adCategories.map((cat) => cat.toLowerCase());
 
@@ -194,18 +218,42 @@ export class AdSelectorService {
 
   /**
    * Score a single ad candidate
+   * Handles optional category and tags
    */
-  static scoreAd(ad: CandidateAd, videoCategory: string, videoTags: string[]): ScoringResult {
+  static scoreAd(ad: CandidateAd, videoCategory?: string, videoTags?: string[]): ScoringResult {
     const tagOverlap = this.calculateTagOverlap(videoTags, ad.tags);
     const categoryMatch = this.calculateCategoryMatch(videoCategory, ad.categories);
     const budgetFactor = this.calculateBudgetFactor(ad);
     const bidAmount = this.calculateBidAmount(ad);
 
-    const score =
-      tagOverlap * SCORING_WEIGHTS.TAG_OVERLAP +
-      categoryMatch * SCORING_WEIGHTS.CATEGORY_MATCH +
-      budgetFactor * SCORING_WEIGHTS.BUDGET_FACTOR +
-      bidAmount * SCORING_WEIGHTS.BID_AMOUNT;
+    // Adjust weights dynamically based on what's provided
+    const hasCategory = videoCategory && videoCategory.trim().length > 0;
+    const hasTags = videoTags && videoTags.length > 0;
+
+    let score = 0;
+    
+    if (hasCategory && hasTags) {
+      // Both provided - use standard weights
+      score =
+        tagOverlap * SCORING_WEIGHTS.TAG_OVERLAP +
+        categoryMatch * SCORING_WEIGHTS.CATEGORY_MATCH +
+        budgetFactor * SCORING_WEIGHTS.BUDGET_FACTOR +
+        bidAmount * SCORING_WEIGHTS.BID_AMOUNT;
+    } else if (hasCategory) {
+      // Only category - give it more weight
+      const categoryWeight = SCORING_WEIGHTS.CATEGORY_MATCH + SCORING_WEIGHTS.TAG_OVERLAP;
+      score =
+        categoryMatch * categoryWeight +
+        budgetFactor * SCORING_WEIGHTS.BUDGET_FACTOR +
+        bidAmount * SCORING_WEIGHTS.BID_AMOUNT;
+    } else if (hasTags) {
+      // Only tags - give them more weight
+      const tagsWeight = SCORING_WEIGHTS.TAG_OVERLAP + SCORING_WEIGHTS.CATEGORY_MATCH;
+      score =
+        tagOverlap * tagsWeight +
+        budgetFactor * SCORING_WEIGHTS.BUDGET_FACTOR +
+        bidAmount * SCORING_WEIGHTS.BID_AMOUNT;
+    }
 
     return {
       adId: ad.id,
@@ -262,8 +310,8 @@ export class AdSelectorService {
     anonId?: string;
     sessionId?: string;
     videoId: string;
-    category: string;
-    tags: string[];
+    category?: string;
+    tags?: string[];
     costCents: number;
     expiresAt: Date;
     userAgent?: string;
@@ -328,8 +376,8 @@ export class AdSelectorService {
           anonId: data.anonId, // Store anonymous ID in anonId
           sessionId: data.sessionId,
           videoId: data.videoId,
-          category: data.category,
-          tags: data.tags,
+          category: data.category || null, // Optional category
+          tags: data.tags || [], // Optional tags
           costCents: data.costCents,
           expiresAt: data.expiresAt,
           userAgent: data.userAgent,

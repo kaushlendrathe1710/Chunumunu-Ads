@@ -110,7 +110,7 @@ export default function TeamSettings() {
       TeamAPI.updateMember(currentTeam!.id, userId, {
         role: newRole as TeamRole,
         permissions:
-          newRole === 'admin'
+          newRole === teamRole.admin
             ? [permission.view_campaign, permission.view_ad, permission.manage_team]
             : [permission.view_campaign, permission.view_ad],
       }),
@@ -210,7 +210,7 @@ export default function TeamSettings() {
       </div>
 
       {/* Invite Member Form */}
-      {(userRole === 'owner' || userRole === 'admin') && (
+      {(userRole === teamRole.owner || userRole === teamRole.admin) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -231,12 +231,13 @@ export default function TeamSettings() {
               <Button
                 type="submit"
                 disabled={
+                  inviteMutation.isPending ||
                   !inviteEmail.trim() ||
                   (membersQuery.data?.length || 0) >= limits.maxMembersPerTeam
                 }
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Add Member
+                {inviteMutation.isPending ? 'Adding...' : 'Add Member'}
               </Button>
             </form>
           </CardContent>
@@ -386,8 +387,12 @@ export default function TeamSettings() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button onClick={handleSavePermissions} className="flex-1">
-                Save Permissions
+              <Button 
+                onClick={handleSavePermissions} 
+                className="flex-1"
+                disabled={permissionsMutation.isPending}
+              >
+                {permissionsMutation.isPending ? 'Saving...' : 'Save Permissions'}
               </Button>
               <Button
                 variant="outline"
@@ -396,6 +401,7 @@ export default function TeamSettings() {
                   setSelectedMember(null);
                   setEditingPermissions([]);
                 }}
+                disabled={permissionsMutation.isPending}
               >
                 Cancel
               </Button>

@@ -189,6 +189,7 @@ export const EditAdDialog: React.FC<EditAdDialogProps> = ({
         budget={formData.budget}
         ctaLink={formData.ctaLink}
         campaignBudgetInfo={budgetInfoQuery.data}
+        originalBudget={parseFloat(ad.budget || '0')}
         onChange={(updates: { budget?: number; ctaLink?: string }) =>
           setFormData({ ...formData, ...updates })
         }

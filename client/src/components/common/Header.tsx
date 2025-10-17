@@ -1,12 +1,8 @@
-import logo from '@client/public/logo.svg';
-import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/hooks/useAuth';
 import { useTeam } from '@/hooks/useTeam';
-import { cn } from '@/lib/utils';
-import { Upload, Menu, Plus, Users, ChevronDown, Settings } from 'lucide-react';
+import { Users, Settings } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import {
   DropdownMenu,
@@ -17,8 +13,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
-import { CreateTeamModal, TeamSelector } from '@/components/teams';
+import { TeamSelector } from '@/components/teams';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
+import { permission } from '@shared/constants';
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -76,7 +73,7 @@ export default function Header() {
                 <DropdownMenuSeparator />
 
                 {/* Team Management */}
-                {currentTeam && hasPermission('manage_team') && (
+                {currentTeam && hasPermission(permission.manage_team) && (
                   <>
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>Team Management</DropdownMenuLabel>
