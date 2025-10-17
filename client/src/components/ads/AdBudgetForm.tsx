@@ -14,6 +14,7 @@ interface AdBudgetFormProps {
   budget: number;
   ctaLink: string;
   campaignBudgetInfo?: CampaignBudgetInfo | null;
+  originalBudget: number;
   onChange: (updates: { budget?: number; ctaLink?: string }) => void;
 }
 
@@ -21,6 +22,7 @@ export const AdBudgetForm: React.FC<AdBudgetFormProps> = ({
   budget,
   ctaLink,
   campaignBudgetInfo,
+  originalBudget,
   onChange,
 }) => {
   const handleBudgetChange = (value: string) => {
@@ -76,7 +78,11 @@ export const AdBudgetForm: React.FC<AdBudgetFormProps> = ({
               type="number"
               min="0"
               step="0.01"
-              max={campaignBudgetInfo?.remainingBudget || undefined}
+              max={
+                campaignBudgetInfo
+                  ? (originalBudget || 0) + campaignBudgetInfo.remainingBudget
+                  : undefined
+              }
               value={budget || ''}
               onChange={(e) => handleBudgetChange(e.target.value)}
               placeholder="0.00"
@@ -84,8 +90,8 @@ export const AdBudgetForm: React.FC<AdBudgetFormProps> = ({
             />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Optional: Set a specific budget for this ad. Leave empty to use campaign budget.
-            {campaignBudgetInfo && ` Max: $${campaignBudgetInfo.remainingBudget.toFixed(2)}`}
+            {campaignBudgetInfo &&
+              `You can increase up to $${((originalBudget || 0) + campaignBudgetInfo.remainingBudget).toFixed(2)} total.`}
           </p>
         </div>
 

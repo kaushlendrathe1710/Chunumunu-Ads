@@ -41,6 +41,7 @@ import { toast } from 'react-toastify';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import TeamAPI from '@/api/teamApi';
 import { QK } from '@/api/queryKeys';
+import { permission } from '@shared/constants';
 
 const roleOptions: { value: TeamRole; label: string }[] = [
   { value: 'admin', label: 'Admin' },
@@ -83,42 +84,58 @@ export function TeamMembersManagement() {
     enabled: !!currentTeam,
   });
 
+  const inviteMutation = useMutation({
+    mutationFn: (data: { email: string; role: TeamRole; permissions: Permission[] }) =>
+      TeamAPI.inviteMember(currentTeam!.id, data),
+    onSuccess: () => {
+      toast.success('Member invited successfully');
+      setInviteForm({ email: '', role: 'member', permissions: [] });
+      setShowInviteModal(false);
+      if (currentTeam) queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to invite member');
+    },
+  });
+
+  const updateMemberMutation = useMutation({
+    mutationFn: (data: { userId: number; role: TeamRole; permissions: Permission[] }) =>
+      TeamAPI.updateMember(currentTeam!.id, data.userId, {
+        role: data.role,
+        permissions: data.permissions,
+      }),
+    onSuccess: () => {
+      toast.success('Member updated successfully');
+      setShowEditModal(false);
+      setSelectedMember(null);
+      if (currentTeam) queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to update member');
+    },
+  });
+
   const handleInviteMember = async () => {
     if (!currentTeam || !inviteForm.email.trim()) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    try {
-      await TeamAPI.inviteMember(currentTeam.id, {
-        email: inviteForm.email.trim(),
-        role: inviteForm.role,
-        permissions: inviteForm.permissions,
-      });
-      toast.success('Member invited successfully');
-      setInviteForm({ email: '', role: 'member', permissions: [] });
-      setShowInviteModal(false);
-      queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to invite member');
-    }
+    inviteMutation.mutate({
+      email: inviteForm.email.trim(),
+      role: inviteForm.role,
+      permissions: inviteForm.permissions,
+    });
   };
 
   const handleUpdateMember = async () => {
     if (!currentTeam || !selectedMember) return;
 
-    try {
-      await TeamAPI.updateMember(currentTeam.id, selectedMember.userId, {
-        role: selectedMember.role,
-        permissions: selectedMember.permissions,
-      });
-      toast.success('Member updated successfully');
-      setShowEditModal(false);
-      setSelectedMember(null);
-      queryClient.invalidateQueries({ queryKey: QK.teamMembers(currentTeam.id) });
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to update member');
-    }
+    updateMemberMutation.mutate({
+      userId: selectedMember.userId,
+      role: selectedMember.role,
+      permissions: selectedMember.permissions,
+    });
   };
 
   const handleRemoveMember = async (userId: number) => {
@@ -150,7 +167,7 @@ export function TeamMembersManagement() {
     }
   };
 
-  const canManageTeam = hasPermission('manage_team');
+  const canManageTeam = hasPermission(permission.manage_team);
 
   if (!currentTeam) {
     return (
@@ -271,15 +288,16 @@ export function TeamMembersManagement() {
                     variant="outline"
                     onClick={() => setShowInviteModal(false)}
                     className="flex-1"
+                    disabled={inviteMutation.isPending}
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={handleInviteMember}
-                    disabled={!inviteForm.email.trim()}
+                    disabled={inviteMutation.isPending || !inviteForm.email.trim()}
                     className="flex-1"
                   >
-                    Send Invitation
+                    {inviteMutation.isPending ? 'Sending...' : 'Send Invitation'}
                   </Button>
                 </div>
               </div>
@@ -476,11 +494,16 @@ export function TeamMembersManagement() {
                     setSelectedMember(null);
                   }}
                   className="flex-1"
+                  disabled={updateMemberMutation.isPending}
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleUpdateMember} className="flex-1">
-                  Update Member
+                <Button 
+                  onClick={handleUpdateMember} 
+                  className="flex-1"
+                  disabled={updateMemberMutation.isPending}
+                >
+                  {updateMemberMutation.isPending ? 'Updating...' : 'Update Member'}
                 </Button>
               </div>
             </div>

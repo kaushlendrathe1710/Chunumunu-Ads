@@ -5,6 +5,7 @@ import { TeamWithUserRole, Permission } from '@shared/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import TeamAPI from '@/api/teamApi';
 import { QK } from '@/api/queryKeys';
+import { teamRole } from '@shared/constants';
 
 export const useTeam = () => {
   const dispatch = useAppDispatch();
@@ -84,7 +85,7 @@ export const useTeam = () => {
   };
 
   const hasPermission = (permission: Permission): boolean => {
-    if (userRole === 'owner') return true; // owners implicitly have all permissions
+    if (userRole === teamRole.owner) return true; // owners implicitly have all permissions
     return userPermissions.includes(permission);
   };
 
