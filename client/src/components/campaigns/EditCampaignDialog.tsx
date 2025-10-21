@@ -51,7 +51,14 @@ export function EditCampaignDialog({
     },
   });
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, setValue, watch, reset } = form;
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setValue,
+    watch,
+    reset,
+  } = form;
   const watchedValues = watch();
 
   const queryClient = useQueryClient();
@@ -107,7 +114,7 @@ export function EditCampaignDialog({
       const payload: UpdateCampaignPayload = {
         name: data.name.trim(),
         description: data.description?.trim() || '',
-        budget: data.budget.toString(),
+        budget: data.budget,
         startDate: data.startDate ? data.startDate : undefined,
         endDate: data.endDate ? data.endDate : undefined,
         status: data.status as 'draft' | 'active' | 'paused' | 'completed',
@@ -174,22 +181,13 @@ export function EditCampaignDialog({
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium">Campaign Name</label>
-            <Input
-              {...register('name')}
-              placeholder="Enter campaign name"
-            />
-            {errors.name && (
-              <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>
-            )}
+            <Input {...register('name')} placeholder="Enter campaign name" />
+            {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium">Description</label>
-            <Textarea
-              {...register('description')}
-              placeholder="Describe your campaign"
-              rows={3}
-            />
+            <Textarea {...register('description')} placeholder="Describe your campaign" rows={3} />
             {errors.description && (
               <p className="mt-1 text-xs text-red-600">{errors.description.message}</p>
             )}
@@ -204,9 +202,7 @@ export function EditCampaignDialog({
               {...register('budget', { valueAsNumber: true })}
               placeholder="0.00"
             />
-            {errors.budget && (
-              <p className="mt-1 text-xs text-red-600">{errors.budget.message}</p>
-            )}
+            {errors.budget && <p className="mt-1 text-xs text-red-600">{errors.budget.message}</p>}
             {budgetIncrease > 0 && (
               <p className="mt-1 text-xs text-blue-600">
                 Additional ${budgetIncrease.toFixed(2)} will be deducted from wallet
@@ -238,7 +234,11 @@ export function EditCampaignDialog({
               date={watchedValues.endDate}
               onDateChange={(date) => setValue('endDate', date)}
               placeholder="Select end date"
-              minDate={watchedValues.startDate ? new Date(watchedValues.startDate.getTime() + 24 * 60 * 60 * 1000) : new Date()}
+              minDate={
+                watchedValues.startDate
+                  ? new Date(watchedValues.startDate.getTime() + 24 * 60 * 60 * 1000)
+                  : new Date()
+              }
             />
             {errors.endDate && (
               <p className="mt-1 text-xs text-red-600">{errors.endDate.message}</p>
@@ -250,7 +250,9 @@ export function EditCampaignDialog({
             <label className="mb-2 block text-sm font-medium">Campaign Status</label>
             <RadioGroup
               value={watchedValues.status}
-              onValueChange={(value) => setValue('status', value as 'draft' | 'active' | 'paused' | 'completed')}
+              onValueChange={(value) =>
+                setValue('status', value as 'draft' | 'active' | 'paused' | 'completed')
+              }
               className="grid grid-cols-2 gap-4"
             >
               {statusOptions.map((option) => (

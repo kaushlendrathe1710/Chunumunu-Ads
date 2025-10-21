@@ -28,14 +28,20 @@ export interface CampaignDto {
 export interface CreateCampaignPayload {
   name: string;
   description?: string;
-  // budget is sent as a decimal string to match server DB/validation expectations
-  budget: string;
+  budget: number;
   startDate?: Date; // send Date object (JSON will serialize it) to allow server-side Date parsing
   endDate?: Date; // send Date object
   status?: 'draft' | 'active' | 'paused' | 'completed';
 }
 
-export interface UpdateCampaignPayload extends Partial<CreateCampaignPayload> {}
+export interface UpdateCampaignPayload {
+  name?: string;
+  description?: string;
+  budget?: number; // Consistent with create - both use number
+  startDate?: Date;
+  endDate?: Date;
+  status?: 'draft' | 'active' | 'paused' | 'completed';
+}
 
 export interface TeamWalletBalance {
   balance: string;

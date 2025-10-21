@@ -140,7 +140,7 @@ export function CreateCampaignDialog({
       const payload: CreateCampaignPayload = {
         name: data.name.trim(),
         description: data.description?.trim() || '',
-        budget: data.budget.toString(),
+        budget: data.budget,
         startDate: data.startDate ? data.startDate : undefined,
         endDate: data.endDate ? data.endDate : undefined,
         status: data.status,
