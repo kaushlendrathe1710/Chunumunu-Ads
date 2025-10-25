@@ -5,6 +5,29 @@ import { setupVite, serveStatic, log } from './vite';
 import { initDatabase } from '@server/db/connect';
 // sessionStore is exported from services when needed
 
+// Validate required environment variables
+const requiredEnvVars = [
+  'VIDEOSTREAMPRO_AUTH_URL',
+  'VIDEOSTREAMPRO_API_KEY',
+  'DATABASE_URL',
+  'JWT_SECRET',
+];
+
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`ERROR: Required environment variable ${envVar} is not defined`);
+    console.error('Please check your .env file');
+    process.exit(1);
+  }
+}
+
+console.log('\n========== Chunumunu-Ads Configuration ==========');
+console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
+console.log(`Port: ${process.env.PORT || 3000}`);
+console.log(`VideoStreamPro Auth URL: ${process.env.VIDEOSTREAMPRO_AUTH_URL}`);
+console.log(`VideoStreamPro API Key: ${process.env.VIDEOSTREAMPRO_API_KEY ? '✓ Configured' : '✗ Missing'}`);
+console.log('=================================================\n');
+
 const app = createApp();
 
 (async () => {

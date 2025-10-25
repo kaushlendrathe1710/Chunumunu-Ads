@@ -539,7 +539,10 @@ export class AdSelectorService {
     // Process the impression event
     if (event === 'served') {
       // Only 'served' events trigger billing
-      await this.processBillingForServedImpression(impression, metadata);
+      const billingSuccess = await this.processBillingForServedImpression(impression, metadata);
+      if (!billingSuccess) {
+        throw new Error('Billing processing failed - transaction did not complete successfully');
+      }
     } else {
       // For other events (clicked, completed, skipped), just update tracking
       await this.updateImpressionEvent(impression, event, metadata);
@@ -550,6 +553,8 @@ export class AdSelectorService {
 
   /**
    * Process billing for served impression with proper budget management
+   * Returns true if billing was successfully processed and creator revenue was credited
+   * Returns false if billing failed or creator revenue crediting failed
    */
   private static async processBillingForServedImpression(
     impression: any,
@@ -563,100 +568,170 @@ export class AdSelectorService {
       user_id?: string;
       anon_id?: string;
     }
-  ) {
-    await db.transaction(async (tx) => {
-      // Get ad and campaign for budget deduction
-      const [adData] = await tx
-        .select({
-          adId: ads.id,
-          adBudget: ads.budget,
-          adSpent: ads.spent,
-          campaignId: campaigns.id,
-          campaignBudget: campaigns.budget,
-          campaignSpent: campaigns.spent,
-          teamId: campaigns.teamId,
-        })
-        .from(ads)
-        .innerJoin(campaigns, eq(ads.campaignId, campaigns.id))
-        .where(eq(ads.id, impression.adId))
-        .for('update'); // Lock for concurrent safety
-
-      if (!adData) {
-        throw new Error('Ad or campaign not found');
-      }
-
-      const costDollars = (impression.costCents || 0) / 100;
-
-      // Determine budget source based on ad budget setting
-      // If ad budget is -1 or null/undefined, use campaign budget
-      // Otherwise, use ad-specific budget
-      const useAdBudget = adData.adBudget && adData.adBudget !== '-1' && adData.adBudget !== '0';
-      
-      if (useAdBudget) {
-        // Deduct from ad-specific budget
-        const currentAdSpent = parseFloat(adData.adSpent || '0');
-        const adBudgetLimit = parseFloat(adData.adBudget || '0');
-        
-        // Check if ad budget would be exceeded
-        if (currentAdSpent + costDollars > adBudgetLimit) {
-          throw new Error('Ad budget would be exceeded');
-        }
-        
-        await tx
-          .update(ads)
-          .set({
-            spent: sql`${ads.spent} + ${costDollars}`,
-            updatedAt: new Date(),
+  ): Promise<boolean> {
+    try {
+      await db.transaction(async (tx) => {
+        // Get ad and campaign for budget deduction
+        const [adData] = await tx
+          .select({
+            adId: ads.id,
+            adBudget: ads.budget,
+            adSpent: ads.spent,
+            campaignId: campaigns.id,
+            campaignBudget: campaigns.budget,
+            campaignSpent: campaigns.spent,
+            teamId: campaigns.teamId,
           })
-          .where(eq(ads.id, impression.adId));
+          .from(ads)
+          .innerJoin(campaigns, eq(ads.campaignId, campaigns.id))
+          .where(eq(ads.id, impression.adId))
+          .for('update'); // Lock for concurrent safety
+
+        if (!adData) {
+          throw new Error('Ad or campaign not found');
+        }
+
+        const costDollars = (impression.costCents || 0) / 100;
+
+        // Determine budget source based on ad budget setting
+        // If ad budget is -1 or null/undefined, use campaign budget
+        // Otherwise, use ad-specific budget
+        const useAdBudget = adData.adBudget && adData.adBudget !== '-1' && adData.adBudget !== '0';
+        
+        if (useAdBudget) {
+          // Deduct from ad-specific budget
+          const currentAdSpent = parseFloat(adData.adSpent || '0');
+          const adBudgetLimit = parseFloat(adData.adBudget || '0');
+          
+          // Check if ad budget would be exceeded
+          if (currentAdSpent + costDollars > adBudgetLimit) {
+            throw new Error('Ad budget would be exceeded');
+          }
+          
+          await tx
+            .update(ads)
+            .set({
+              spent: sql`${ads.spent} + ${costDollars}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(ads.id, impression.adId));
+        } else {
+          // Deduct from campaign budget
+          const currentCampaignSpent = parseFloat(adData.campaignSpent || '0');
+          const campaignBudgetLimit = parseFloat(adData.campaignBudget || '0');
+          
+          // Check if campaign budget would be exceeded
+          if (campaignBudgetLimit > 0 && currentCampaignSpent + costDollars > campaignBudgetLimit) {
+            throw new Error('Campaign budget would be exceeded');
+          }
+          
+          await tx
+            .update(campaigns)
+            .set({
+              spent: sql`${campaigns.spent} + ${costDollars}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(campaigns.id, impression.campaignId));
+        }
+
+        // Update impression status to 'served' with metadata
+        // If user identification is provided, update the impression record
+        const updateData: any = {
+          status: 'served',
+          action: 'view',
+          userAgent: metadata?.userAgent,
+          ipAddress: metadata?.ipAddress,
+          osType: (metadata?.os as any) || null,
+          deviceType: (metadata?.deviceType as any) || null,
+          viewDuration: metadata?.viewDuration,
+          videoProgress: metadata?.videoProgress?.toString(),
+          confirmedAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        // Update user identification if provided (for user session bridging)
+        if (metadata?.user_id) {
+          updateData.viewerId = metadata.user_id;
+          updateData.anonId = null; // Clear anon_id if user becomes authenticated
+        } else if (metadata?.anon_id && !impression.viewerId) {
+          // Only update anon_id if no authenticated user is already associated
+          updateData.anonId = metadata.anon_id;
+        }
+
+        await tx
+          .update(adImpressions)
+          .set(updateData)
+          .where(eq(adImpressions.token, impression.token));
+      });
+
+      // After successful billing, credit the creator revenue
+      // This happens outside the transaction to avoid blocking the impression confirmation
+      await this.creditCreatorRevenue(impression);
+
+      // Transaction completed successfully and creator revenue was processed
+      return true;
+    } catch (error) {
+      // Log the billing error and return false
+      console.error(
+        `[BILLING ERROR] Failed to process billing for impression ${impression.id}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Credit creator revenue by notifying VideoStreamPro for monetization
+   * Called after billing has been successfully processed for an ad impression
+   */
+  private static async creditCreatorRevenue(
+    impression: any
+  ): Promise<void> {
+    // Only credit if we have all required data
+    if (!impression.videoId || !impression.costCents) {
+      console.log(
+        `[MONETIZATION] Skipping creator revenue credit - missing data. VideoId: ${impression.videoId || 'missing'}, CostCents: ${impression.costCents || 'missing'}`
+      );
+      return;
+    }
+
+    try {
+      // Import dynamically to avoid circular dependencies
+      const { VideoStreamProService } = await import('../../services/videostreampro.service');
+
+      console.log(
+        `[MONETIZATION] Crediting creator revenue for video ${impression.videoId} - notifying VideoStreamPro (adId: ${impression.adId}, cost: ${impression.costCents} cents)`
+      );
+
+      // Notify VideoStreamPro about ad serving (fire and forget, don't block response)
+      const response = await VideoStreamProService.notifyAdConfirmation({
+        videoId: impression.videoId,
+        viewerId: impression.viewerId || undefined,
+        adId: impression.adId,
+        costCents: impression.costCents,
+      });
+
+      if (response.success) {
+        console.log(
+          `[MONETIZATION] Successfully credited creator revenue - monetization enabled: ${response.monetizationEnabled}`
+        );
+        if (response.data) {
+          console.log(
+            `[MONETIZATION] Creator earned ${response.data.amountCents} cents (${response.data.revenueShare * 100}% of ${response.data.adCostCents} cents)`
+          );
+        }
       } else {
-        // Deduct from campaign budget
-        const currentCampaignSpent = parseFloat(adData.campaignSpent || '0');
-        const campaignBudgetLimit = parseFloat(adData.campaignBudget || '0');
-        
-        // Check if campaign budget would be exceeded
-        if (campaignBudgetLimit > 0 && currentCampaignSpent + costDollars > campaignBudgetLimit) {
-          throw new Error('Campaign budget would be exceeded');
-        }
-        
-        await tx
-          .update(campaigns)
-          .set({
-            spent: sql`${campaigns.spent} + ${costDollars}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(campaigns.id, impression.campaignId));
+        console.log(
+          `[MONETIZATION] Creator revenue credit failed: ${response.message}`
+        );
       }
-
-      // Update impression status to 'served' with metadata
-      // If user identification is provided, update the impression record
-      const updateData: any = {
-        status: 'served',
-        action: 'view',
-        userAgent: metadata?.userAgent,
-        ipAddress: metadata?.ipAddress,
-        osType: (metadata?.os as any) || null,
-        deviceType: (metadata?.deviceType as any) || null,
-        viewDuration: metadata?.viewDuration,
-        videoProgress: metadata?.videoProgress?.toString(),
-        confirmedAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      // Update user identification if provided (for user session bridging)
-      if (metadata?.user_id) {
-        updateData.viewerId = metadata.user_id;
-        updateData.anonId = null; // Clear anon_id if user becomes authenticated
-      } else if (metadata?.anon_id && !impression.viewerId) {
-        // Only update anon_id if no authenticated user is already associated
-        updateData.anonId = metadata.anon_id;
-      }
-
-      await tx
-        .update(adImpressions)
-        .set(updateData)
-        .where(eq(adImpressions.token, impression.token));
-    });
+    } catch (error) {
+      // Log but don't fail the request
+      console.error(
+        `[MONETIZATION] Error crediting creator revenue:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
   }
 
   /**
