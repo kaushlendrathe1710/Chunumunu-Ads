@@ -232,6 +232,7 @@ export class TeamService {
         'delete_ad',
         'view_ad',
         'manage_team',
+        'view_analytics',
       ];
       return {
         hasPermission: true,
@@ -288,6 +289,7 @@ export class TeamService {
         'delete_ad',
         'view_ad',
         'manage_team',
+        'view_analytics',
       ];
       return {
         isMember: true,

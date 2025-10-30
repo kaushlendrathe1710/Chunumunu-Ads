@@ -14,17 +14,25 @@ import {
 import { Home, Tag, Users, Settings, PlayCircle, Wallet, Building } from 'lucide-react';
 import { useTeam } from '@/hooks/useTeam';
 import { Separator } from '@radix-ui/react-select';
-import { teamRole } from '@shared/constants';
+import { teamRole, permission } from '@shared/constants';
 
 export default function DashboardSidebar() {
   const { user } = useAuth();
-  const { currentTeam, userRole } = useTeam();
+  const { currentTeam, userRole, hasPermission } = useTeam();
   const [location] = useLocation();
 
   const isActive = (path: string) => location === path || location.startsWith(path + '/');
 
   // Only show team management if user is on a team and has admin+ permissions
-  const hasTeamManagement = currentTeam && (userRole === teamRole.owner || userRole === teamRole.admin);
+  const hasTeamManagement =
+    currentTeam && (userRole === teamRole.owner || userRole === teamRole.admin);
+
+  // Check if user can view analytics
+  const canViewAnalytics =
+    currentTeam &&
+    (userRole === teamRole.owner ||
+      userRole === teamRole.admin ||
+      hasPermission(permission.view_analytics));
 
   return (
     <Sidebar side="left" variant="sidebar" collapsible="icon">
@@ -101,14 +109,16 @@ export default function DashboardSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
 
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive('/team/analytics')}>
-                    <Link href="/team/analytics" className="flex items-center">
-                      <Settings className="mr-2 size-4" />
-                      <span>Analytics</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {canViewAnalytics && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive('/team/analytics')}>
+                      <Link href="/team/analytics" className="flex items-center">
+                        <Settings className="mr-2 size-4" />
+                        <span>Analytics</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
               </>
             )}
           </SidebarMenu>

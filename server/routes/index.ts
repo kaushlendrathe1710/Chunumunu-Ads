@@ -8,6 +8,7 @@ import uploadRoutes from './upload.routes.js';
 import impressionRoutes from './impression.routes.js';
 import campaignRoutes from './campaign.routes.js';
 import adsRoutes from './ads.routes.js';
+import analyticsRoutes from './analytics.routes';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Register all route groups
@@ -28,6 +29,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register campaign and ads routes (these have global auth middleware)
   app.use('/api', campaignRoutes);
   app.use('/api', adsRoutes);
+  app.use('/api', analyticsRoutes);
 
   // Create and return HTTP server
   return createServer(app);

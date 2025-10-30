@@ -16,9 +16,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, MoreVertical, Eye, Trash2, Filter, Edit, User } from 'lucide-react';
+import { Plus, MoreVertical, Eye, Trash2, Filter, Edit, User, BarChart3 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { CreateAdDialog, EditAdDialog, ViewAdDialog } from '@/components/ads';
 import {
@@ -150,7 +151,10 @@ export default function TeamAds() {
     );
   }
 
-  const canManageAds = userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.create_ad);
+  const canManageAds =
+    userRole === teamRole.owner ||
+    userRole === teamRole.admin ||
+    hasPermission(permission.create_ad);
 
   return (
     <div className="space-y-6 p-6">
@@ -265,6 +269,19 @@ export default function TeamAds() {
                             View Details
                           </DropdownMenuItem>
                         )}
+                        {(userRole === teamRole.owner ||
+                          userRole === teamRole.admin ||
+                          hasPermission(permission.view_analytics)) && (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              (window.location.href = `/team/campaigns/${ad.campaignId}/ads/${ad.id}/analytics`)
+                            }
+                          >
+                            <BarChart3 className="mr-2 h-4 w-4" />
+                            View Analytics
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
                         {hasPermission(permission.edit_ad) && (
                           <DropdownMenuItem onClick={() => setEditingAd(ad)}>
                             <Edit className="mr-2 h-4 w-4" />
@@ -363,7 +380,7 @@ export default function TeamAds() {
                         <span>{ad.creator.username}</span>
                       </div>
                     )}
-                    <div className='flex flex-col gap-1'>
+                    <div className="flex flex-col gap-1">
                       <span>Created: {new Date(ad.createdAt).toLocaleDateString()}</span>
                       <span>Updated: {new Date(ad.updatedAt).toLocaleDateString()}</span>
                     </div>

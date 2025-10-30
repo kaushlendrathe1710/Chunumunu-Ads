@@ -31,6 +31,10 @@ export const QK = {
   walletTransactions: (page: number, limit: number) =>
     ['wallet', 'transactions', page, limit] as const,
   analytics: (teamId: number | string) => ['team', teamId, 'analytics'] as const,
+  campaignAnalytics: (teamId: number | string, campaignId: number | string) =>
+    ['campaign', teamId, campaignId, 'analytics'] as const,
+  adAnalytics: (teamId: number | string, campaignId: number | string, adId: number | string) =>
+    ['ad', teamId, campaignId, adId, 'analytics'] as const,
 };
 
 export type QueryKey = ReturnType<(typeof QK)[keyof typeof QK]>;

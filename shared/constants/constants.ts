@@ -20,6 +20,7 @@ export const permission = {
   delete_ad: 'delete_ad',
   view_ad: 'view_ad',
   manage_team: 'manage_team',
+  view_analytics: 'view_analytics',
 } as const;
 
 export const adStatus = {

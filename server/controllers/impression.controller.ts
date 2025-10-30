@@ -65,6 +65,10 @@ export class ImpressionController {
         });
       }
 
+      console.log(
+        `[IMPRESSION DEBUG] Event: ${event}, Status: ${impression.status}, AdId: ${impression.adId}, VideoId: ${impression.videoId || 'MISSING'}, CostCents: ${impression.costCents || 'MISSING'}`
+      );
+
       // Check if impression has expired
       if (
         impression.status === 'expired' ||
@@ -88,6 +92,10 @@ export class ImpressionController {
       try {
         // Process the impression event
         const result = await AdSelectorService.confirmImpression(token, event, enhancedMetadata);
+
+        console.log(
+          `[IMPRESSION] Event '${event}' processed for ad ${impression.adId}, video ${impression.videoId || 'N/A'}`
+        );
 
         const responseMessage = ImpressionController.getEventMessage(event);
         

@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
-import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/components/ui/input-otp';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from '@/components/ui/input-otp';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { setAuthToken } from '@/api/queryClient';
@@ -18,7 +23,7 @@ export default function VerifyOtp() {
   const [location, setLocation] = useLocation();
   const { updateUser } = useAuth();
 
-  // Get email from URL params or localStorage  
+  // Get email from URL params or localStorage
   const email = (() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
@@ -32,7 +37,7 @@ export default function VerifyOtp() {
 
   useEffect(() => {
     document.title = 'Verify OTP - ChunuMunu Ads';
-    
+
     // If no email, redirect back to auth
     if (!email) {
       setLocation('/auth');
@@ -87,16 +92,15 @@ export default function VerifyOtp() {
       if (verifyResult.data.token && verifyResult.data.user) {
         setAuthToken(verifyResult.data.token);
         localStorage.removeItem('sso_email'); // Clean up
-        
+
         updateUser(verifyResult.data.user);
         toast.success('Successfully signed in!');
-        
+
         // Redirect to dashboard
         setLocation('/');
       } else {
         throw new Error('Invalid response from server');
       }
-
     } catch (error: any) {
       console.error('Verify OTP error:', error);
       setError(error.message || 'Verification failed. Please try again.');
@@ -157,26 +161,25 @@ export default function VerifyOtp() {
 
         <CardContent className="space-y-6">
           {error && (
-            <div className="p-3 rounded-md bg-red-50 border border-red-200">
+            <div className="rounded-md border border-red-200 bg-red-50 p-3">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
 
           <div className="space-y-4">
             <div className="flex justify-center">
-              <InputOTP
-                value={otp}
-                onChange={setOtp}
-                maxLength={6}
-                disabled={isVerifying}
-              >
+              <InputOTP value={otp} onChange={setOtp} maxLength={6} disabled={isVerifying}>
                 <InputOTPGroup>
                   <InputOTPSlot index={0} />
                   <InputOTPSlot index={1} />
-                  <InputOTPSeparator />
+                </InputOTPGroup>
+                <InputOTPSeparator />
+                <InputOTPGroup>
                   <InputOTPSlot index={2} />
                   <InputOTPSlot index={3} />
-                  <InputOTPSeparator />
+                </InputOTPGroup>
+                <InputOTPSeparator />
+                <InputOTPGroup>
                   <InputOTPSlot index={4} />
                   <InputOTPSlot index={5} />
                 </InputOTPGroup>

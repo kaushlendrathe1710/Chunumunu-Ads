@@ -6,15 +6,16 @@ import { useQuery } from '@tanstack/react-query';
 import { QK } from '@/api/queryKeys';
 import AnalyticsAPI, { TeamAnalyticsDto } from '@/api/analyticsApi';
 import { permission, teamRole } from '@shared/constants';
+import { BarChart3, TrendingUp, Eye, DollarSign, Award, LineChart } from 'lucide-react';
 import {
-  BarChart3,
-  TrendingUp,
-  TrendingDown,
-  Eye,
-  MousePointer,
-  DollarSign,
-  Users,
-} from 'lucide-react';
+  LineChart as RechartsLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 type TeamAnalytics = TeamAnalyticsDto;
 
@@ -40,10 +41,6 @@ export default function TeamAnalytics() {
     return new Intl.NumberFormat('en-US').format(num);
   };
 
-  const formatPercentage = (num: number) => {
-    return `${(num * 100).toFixed(2)}%`;
-  };
-
   if (!currentTeam) {
     return (
       <div className="p-6">
@@ -57,7 +54,9 @@ export default function TeamAnalytics() {
   }
 
   const canViewAnalytics =
-    userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.view_campaign);
+    userRole === teamRole.owner ||
+    userRole === teamRole.admin ||
+    hasPermission(permission.view_analytics);
 
   if (!canViewAnalytics) {
     return (
@@ -93,7 +92,7 @@ export default function TeamAnalytics() {
       ) : (
         <>
           {/* Overview Stats */}
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Campaigns</CardTitle>
@@ -101,24 +100,20 @@ export default function TeamAnalytics() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{analytics?.totalCampaigns || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  {analytics?.activeCampaigns || 0} active
-                </p>
+                <p className="text-xs text-muted-foreground">Active campaigns in team</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Budget</CardTitle>
+                <CardTitle className="text-sm font-medium">Available Budget</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {formatCurrency(analytics?.totalBudget || 0)}
+                  {formatCurrency(analytics?.availableBudget || 0)}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {formatCurrency(analytics?.totalSpent || 0)} spent
-                </p>
+                <p className="text-xs text-muted-foreground">Team creator's wallet balance</p>
               </CardContent>
             </Card>
 
@@ -134,89 +129,89 @@ export default function TeamAnalytics() {
                 <p className="text-xs text-muted-foreground">Across all campaigns</p>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Clicks</CardTitle>
-                <MousePointer className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatNumber(analytics?.totalClicks || 0)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {formatPercentage(analytics?.averageCTR || 0)} CTR
-                </p>
-              </CardContent>
-            </Card>
           </div>
 
-          {/* Performance Metrics */}
+          {/* Top Performers */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {/* Top Campaigns */}
             <Card>
               <CardHeader>
-                <CardTitle>Performance Overview</CardTitle>
-                <CardDescription>Key performance indicators</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Click-Through Rate</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold">
-                      {formatPercentage(analytics?.averageCTR || 0)}
-                    </span>
-                    <TrendingUp className="h-4 w-4 text-green-500" />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Average CPC</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold">
-                      {formatCurrency(analytics?.averageCPC || 0)}
-                    </span>
-                    <TrendingDown className="h-4 w-4 text-red-500" />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Budget Utilization</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold">
-                      {analytics?.totalBudget
-                        ? formatPercentage((analytics.totalSpent || 0) / analytics.totalBudget)
-                        : '0%'}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Performing Campaigns</CardTitle>
-                <CardDescription>Campaigns with highest engagement</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Award className="h-5 w-5 text-yellow-500" />
+                  Top 3 Performing Campaigns
+                </CardTitle>
+                <CardDescription>Campaigns with highest impressions</CardDescription>
               </CardHeader>
               <CardContent>
                 {!analytics?.topCampaigns || analytics.topCampaigns.length === 0 ? (
                   <p className="py-4 text-center text-gray-500">No campaign data available yet</p>
                 ) : (
                   <div className="space-y-3">
-                    {(analytics?.topCampaigns || []).slice(0, 5).map((campaign, index) => (
+                    {(analytics?.topCampaigns || []).map((campaign, index) => (
                       <div key={campaign.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600">
+                          <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                              index === 0
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : index === 1
+                                  ? 'bg-gray-100 text-gray-700'
+                                  : 'bg-orange-100 text-orange-700'
+                            }`}
+                          >
                             {index + 1}
                           </div>
                           <span className="text-sm font-medium">{campaign.name}</span>
                         </div>
                         <div className="text-right">
                           <div className="text-sm font-bold">
-                            {formatNumber(campaign.clicks)} clicks
+                            {formatNumber(campaign.impressions)}
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {formatCurrency(campaign.spent)}
+                          <div className="text-xs text-gray-500">impressions</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Top Ads */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Award className="h-5 w-5 text-blue-500" />
+                  Top 3 Performing Ads
+                </CardTitle>
+                <CardDescription>Ads with highest impressions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!analytics?.topAds || analytics.topAds.length === 0 ? (
+                  <p className="py-4 text-center text-gray-500">No ad data available yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(analytics?.topAds || []).map((ad, index) => (
+                      <div key={ad.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                              index === 0
+                                ? 'bg-blue-100 text-blue-700'
+                                : index === 1
+                                  ? 'bg-gray-100 text-gray-700'
+                                  : 'bg-purple-100 text-purple-700'
+                            }`}
+                          >
+                            {index + 1}
                           </div>
+                          <div>
+                            <div className="text-sm font-medium">{ad.title}</div>
+                            <div className="text-xs text-gray-500">{ad.campaignName}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-bold">{formatNumber(ad.impressions)}</div>
+                          <div className="text-xs text-gray-500">impressions</div>
                         </div>
                       </div>
                     ))}
@@ -226,22 +221,61 @@ export default function TeamAnalytics() {
             </Card>
           </div>
 
-          {/* Placeholder for Future Charts */}
+          {/* Impressions Over Time Chart */}
           <Card>
             <CardHeader>
-              <CardTitle>Performance Charts</CardTitle>
-              <CardDescription>Detailed analytics visualization (Coming Soon)</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <LineChart className="h-5 w-5" />
+                Impressions Over Time
+              </CardTitle>
+              <CardDescription>Last 30 days impression trends</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex h-64 items-center justify-center rounded-lg bg-gray-50">
-                <div className="text-center">
-                  <BarChart3 className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                  <p className="text-gray-500">Interactive charts and graphs coming soon</p>
-                  <p className="mt-2 text-xs text-gray-400">
-                    This will include campaign performance over time, conversion funnels, and more
-                  </p>
+              {!analytics?.impressionsOverTime || analytics.impressionsOverTime.length === 0 ? (
+                <div className="flex h-64 items-center justify-center rounded-lg bg-gray-50">
+                  <div className="text-center">
+                    <TrendingUp className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                    <p className="text-gray-500">No impression data available yet</p>
+                    <p className="mt-2 text-xs text-gray-400">
+                      Data will appear once ads start receiving impressions
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <RechartsLineChart data={analytics.impressionsOverTime}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value: string) => {
+                        const date = new Date(value);
+                        return `${date.getMonth() + 1}/${date.getDate()}`;
+                      }}
+                    />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip
+                      formatter={(value: number) => [formatNumber(value), 'Impressions']}
+                      labelFormatter={(label: string) => {
+                        const date = new Date(label);
+                        return date.toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        });
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="count"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={{ fill: '#3b82f6', r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </RechartsLineChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </>

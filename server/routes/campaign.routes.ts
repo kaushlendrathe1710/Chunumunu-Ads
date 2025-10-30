@@ -38,11 +38,4 @@ router.delete(
   CampaignController.deleteCampaign
 );
 
-// Analytics routes
-router.get(
-  '/teams/:teamId/campaigns/:campaignId/analytics',
-  checkTeamPermissions,
-  CampaignController.getCampaignAnalytics
-);
-
 export default router;
