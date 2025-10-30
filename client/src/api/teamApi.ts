@@ -123,6 +123,7 @@ class TeamAPI {
       'delete_ad',
       'view_ad',
       'manage_team',
+      'view_analytics',
     ];
 
     const checks = await Promise.all(

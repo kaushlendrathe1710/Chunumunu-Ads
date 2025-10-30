@@ -12,60 +12,73 @@ import { transactions } from '@server/db/schema/wallet.schema';
 import { and, eq } from 'drizzle-orm';
 
 // Create campaign schema without teamId
-const createCampaignSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  description: z.string().optional(),
-  budget: z.number().min(0).optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  status: z.enum(['draft', 'active', 'paused', 'completed']).optional(),
-}).refine((data) => {
-  if (data.startDate && data.endDate) {
-    const startDate = new Date(data.startDate);
-    const endDate = new Date(data.endDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (startDate < today) {
-      return false;
+const createCampaignSchema = z
+  .object({
+    name: z.string().min(1, 'Name is required').max(100),
+    description: z.string().optional(),
+    budget: z.number().min(0).optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    status: z.enum(['draft', 'active', 'paused', 'completed']).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.startDate && data.endDate) {
+        const startDate = new Date(data.startDate);
+        const endDate = new Date(data.endDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (startDate < today) {
+          return false;
+        }
+
+        if (endDate <= startDate) {
+          return false;
+        }
+      }
+      return true;
+    },
+    {
+      message:
+        'Invalid date range: start date cannot be in the past and end date must be after start date',
     }
-    
-    if (endDate <= startDate) {
-      return false;
-    }
-  }
-  return true;
-}, {
-  message: 'Invalid date range: start date cannot be in the past and end date must be after start date',
-});
+  );
 
 // Update campaign schema - override to accept budget as number (consistent with create)
-const updateCampaignSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100).optional(),
-  description: z.string().optional(),
-  budget: z.number().min(0).optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  status: z.enum(['draft', 'active', 'paused', 'completed']).optional(),
-}).partial().refine((data) => {
-  if (data.startDate && data.endDate) {
-    const startDate = new Date(data.startDate);
-    const endDate = new Date(data.endDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (startDate < today) {
-      return false;
+const updateCampaignSchema = z
+  .object({
+    name: z.string().min(1, 'Name is required').max(100).optional(),
+    description: z.string().optional(),
+    budget: z.number().min(0).optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    status: z.enum(['draft', 'active', 'paused', 'completed']).optional(),
+  })
+  .partial()
+  .refine(
+    (data) => {
+      if (data.startDate && data.endDate) {
+        const startDate = new Date(data.startDate);
+        const endDate = new Date(data.endDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (startDate < today) {
+          return false;
+        }
+
+        if (endDate <= startDate) {
+          return false;
+        }
+      }
+      return true;
+    },
+    {
+      message:
+        'Invalid date range: start date cannot be in the past and end date must be after start date',
     }
-    
-    if (endDate <= startDate) {
-      return false;
-    }
-  }
-  return true;
-}, {
-  message: 'Invalid date range: start date cannot be in the past and end date must be after start date',
-});
+  );
 
 export class CampaignController {
   // Campaign methods
@@ -379,34 +392,6 @@ export class CampaignController {
     } catch (error) {
       console.error('Delete campaign error:', error);
       res.status(500).json({ error: 'Failed to delete campaign' });
-    }
-  }
-
-  // Analytics methods (placeholder implementations)
-  static async getCampaignAnalytics(req: AuthenticatedRequest, res: Response) {
-    try {
-      const { teamId, campaignId } = req.params;
-      const { startDate, endDate } = req.query;
-
-      // Check if user has permission to view campaigns (using campaign view for analytics)
-      if (!req.userPermissions?.includes(permission.view_campaign)) {
-        return res.status(403).json({ error: 'Insufficient permissions' });
-      }
-
-      // Placeholder analytics data
-      const analytics = {
-        campaignId: parseInt(campaignId!),
-        impressions: 0,
-        clicks: 0,
-        conversions: 0,
-        spend: 0,
-        dateRange: { startDate, endDate },
-      };
-
-      res.json(analytics);
-    } catch (error) {
-      console.error('Get campaign analytics error:', error);
-      res.status(500).json({ error: 'Failed to fetch analytics' });
     }
   }
 }

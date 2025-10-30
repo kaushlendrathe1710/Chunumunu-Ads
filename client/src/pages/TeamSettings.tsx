@@ -70,6 +70,11 @@ export default function TeamSettings() {
     { id: permission.edit_ad, label: 'Edit Ads', description: 'Can modify existing ads' },
     { id: permission.delete_ad, label: 'Delete Ads', description: 'Can delete ads' },
     { id: permission.manage_team, label: 'Manage Team', description: 'Can manage team members' },
+    {
+      id: permission.view_analytics,
+      label: 'View Analytics',
+      description: 'Can view team, campaign, and ad analytics',
+    },
   ];
 
   const queryClient = useQueryClient();
@@ -387,8 +392,8 @@ export default function TeamSettings() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleSavePermissions} 
+              <Button
+                onClick={handleSavePermissions}
                 className="flex-1"
                 disabled={permissionsMutation.isPending}
               >

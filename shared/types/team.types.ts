@@ -70,6 +70,7 @@ export const inviteMemberSchema = z.object({
         'delete_ad',
         'view_ad',
         'manage_team',
+        'view_analytics',
       ])
     )
     .default([]),
@@ -90,6 +91,7 @@ export const updateMemberSchema = z.object({
         'delete_ad',
         'view_ad',
         'manage_team',
+        'view_analytics',
       ])
     )
     .default([]),

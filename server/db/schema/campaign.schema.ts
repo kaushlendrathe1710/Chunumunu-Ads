@@ -34,9 +34,6 @@ export const ads = pgTable('ads', {
   status: adStatusEnum('status').notNull().default('draft'),
   budget: decimal('budget', { precision: 10, scale: 2 }), // ad-specific budget
   spent: decimal('spent', { precision: 10, scale: 2 }).default('0'),
-  impressions: integer('impressions').default(0),
-  clicks: integer('clicks').default(0),
-  conversions: integer('conversions').default(0),
   campaignId: integer('campaign_id')
     .notNull()
     .references(() => campaigns.id, { onDelete: 'cascade' }),

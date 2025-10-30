@@ -31,10 +31,6 @@ export const adImpressions = pgTable('ad_impressions', {
   category: text('category'), // Category of the content
   tags: text('tags').array(), // Tags of the content
 
-  // Engagement metrics
-  viewDuration: integer('view_duration'), // in seconds
-  videoProgress: decimal('video_progress', { precision: 5, scale: 2 }), // percentage watched (0-100)
-
   // Cost tracking
   costCents: integer('cost_cents'), // Cost in cents for this impression
 

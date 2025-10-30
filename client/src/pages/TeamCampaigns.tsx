@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, MoreVertical, Eye, Edit, Trash2 } from 'lucide-react';
+import { Plus, MoreVertical, Eye, Edit, Trash2, BarChart3 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import CampaignAPI, { CampaignDto, TeamWalletBalance } from '@/api/campaignApi';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -188,7 +188,9 @@ export default function TeamCampaigns() {
   }
 
   const canManageCampaigns =
-    userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.create_campaign);
+    userRole === teamRole.owner ||
+    userRole === teamRole.admin ||
+    hasPermission(permission.create_campaign);
 
   return (
     <div className="space-y-6 p-6">
@@ -252,25 +254,43 @@ export default function TeamCampaigns() {
                           <Eye className="mr-2 h-4 w-4" />
                           View Details
                         </DropdownMenuItem>
+                        {(userRole === teamRole.owner ||
+                          userRole === teamRole.admin ||
+                          hasPermission(permission.view_analytics)) && (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              (window.location.href = `/team/campaigns/${campaign.id}/analytics`)
+                            }
+                          >
+                            <BarChart3 className="mr-2 h-4 w-4" />
+                            View Analytics
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
-                        {canManageCampaigns && (userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.edit_campaign)) && (
-                          <DropdownMenuItem
-                            onClick={() => handleEditCampaign(campaign)}
-                            disabled={campaign.status === 'completed'}
-                          >
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit Campaign
-                          </DropdownMenuItem>
-                        )}
-                        {canManageCampaigns && (userRole === teamRole.owner || userRole === teamRole.admin || hasPermission(permission.delete_campaign)) && (
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteCampaign(campaign)}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete Campaign
-                          </DropdownMenuItem>
-                        )}
+                        {canManageCampaigns &&
+                          (userRole === teamRole.owner ||
+                            userRole === teamRole.admin ||
+                            hasPermission(permission.edit_campaign)) && (
+                            <DropdownMenuItem
+                              onClick={() => handleEditCampaign(campaign)}
+                              disabled={campaign.status === 'completed'}
+                            >
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit Campaign
+                            </DropdownMenuItem>
+                          )}
+                        {canManageCampaigns &&
+                          (userRole === teamRole.owner ||
+                            userRole === teamRole.admin ||
+                            hasPermission(permission.delete_campaign)) && (
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteCampaign(campaign)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete Campaign
+                            </DropdownMenuItem>
+                          )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}

@@ -22,6 +22,8 @@ import TeamSettings from './pages/TeamSettings';
 import TeamCampaigns from './pages/TeamCampaigns';
 import TeamAds from './pages/TeamAds';
 import TeamAnalytics from './pages/TeamAnalytics';
+import CampaignAnalytics from './pages/CampaignAnalytics';
+import AdAnalytics from './pages/AdAnalytics';
 import Profile from './pages/Profile';
 
 import ProtectedRoute from './components/common/ProtectedRoute';
@@ -76,6 +78,14 @@ function Wrapper() {
             <ProtectedRoute path="/team/campaigns" component={TeamCampaigns} />
             <ProtectedRoute path="/team/ads" component={TeamAds} />
             <ProtectedRoute path="/team/analytics" component={TeamAnalytics} />
+            <ProtectedRoute
+              path="/team/campaigns/:campaignId/analytics"
+              component={CampaignAnalytics}
+            />
+            <ProtectedRoute
+              path="/team/campaigns/:campaignId/ads/:adId/analytics"
+              component={AdAnalytics}
+            />
             <ProtectedRoute path="/profile" component={Profile} />
             <Route path="*" component={NotFound} />
           </Switch>
